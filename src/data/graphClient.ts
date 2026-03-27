@@ -34,60 +34,44 @@ export class GraphClient {
     return this.client.api(endpoint).get();
   }
 
-  /** List all sites — getAllSites (beta) with fallback to search.
-   *  For full listing, use SpRestClient.listAllSites() which uses the SP Admin API. */
+  /** List all sites — uses multiple search queries to maximize coverage.
+   *  Note: getAllSites() only supports application permissions, not delegated. */
   async listSites() {
-    // Approach 1: getAllSites on beta — returns ALL sites including Teams
-    try {
-      const results: Record<string, unknown>[] = [];
-      let page = 0;
-      let url: string | null = "/sites/getAllSites()?$top=999";
+    const seen = new Map<string, Record<string, unknown>>();
 
-      while (url) {
-        page++;
-        console.log(`[SP Graph Browser] getAllSites page ${page}...`);
-        const response: Record<string, unknown> = await this.client.api(url).version("beta").get();
-        const value = response.value as Record<string, unknown>[] | undefined;
-        if (value) {
-          results.push(...value);
+    // Run multiple search queries to maximize site discovery
+    const queries = [
+      "/sites?search=*",
+      "/sites?search=site",
+      "/sites?search=team",
+      "/sites?search=project",
+      "/sites?search=department",
+    ];
+
+    for (const query of queries) {
+      try {
+        let url: string | null = query;
+        while (url) {
+          const response: Record<string, unknown> = await this.client.api(url).get();
+          const value = response.value as Record<string, unknown>[] | undefined;
+          if (value) {
+            for (const site of value) {
+              const id = site.id as string;
+              if (id && !seen.has(id)) {
+                seen.set(id, site);
+              }
+            }
+          }
+          const nextLink: string | null = (response["@odata.nextLink"] as string) ?? null;
+          url = nextLink ? nextLink.replace("https://graph.microsoft.com/v1.0", "") : null;
         }
-        const nextLink: string | null = (response["@odata.nextLink"] as string) ?? null;
-        if (nextLink) {
-          // nextLink from beta is a full URL — strip base to use with SDK
-          url = nextLink.replace("https://graph.microsoft.com/beta", "");
-        } else {
-          url = null;
-        }
-      }
-
-      console.log(`[SP Graph Browser] getAllSites returned ${results.length} sites (${page} pages)`);
-      if (results.length > 0) return results;
-    } catch (e) {
-      console.warn("[SP Graph Browser] getAllSites (beta) failed:", e);
-    }
-
-    // Approach 2: search=* with pagination (v1.0)
-    const results: Record<string, unknown>[] = [];
-    let url: string | null = "/sites?search=*";
-    let page = 0;
-
-    while (url) {
-      page++;
-      console.log(`[SP Graph Browser] search page ${page}...`);
-      const response: Record<string, unknown> = await this.client.api(url).get();
-      const value = response.value as Record<string, unknown>[] | undefined;
-      if (value) {
-        results.push(...value);
-      }
-      const nextLink: string | null = (response["@odata.nextLink"] as string) ?? null;
-      if (nextLink) {
-        url = nextLink.replace("https://graph.microsoft.com/v1.0", "");
-      } else {
-        url = null;
+      } catch (e) {
+        console.warn(`[SP Graph Browser] search query failed:`, query, e);
       }
     }
 
-    console.log(`[SP Graph Browser] search=* returned ${results.length} sites (${page} pages)`);
+    const results = Array.from(seen.values());
+    console.log(`[SP Graph Browser] Site search returned ${results.length} unique sites (${queries.length} queries)`);
     return results;
   }
 
