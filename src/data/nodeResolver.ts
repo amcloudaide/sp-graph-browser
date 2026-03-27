@@ -27,7 +27,24 @@ function makeId(parts: string[]): string {
 const definitions: Record<NodeType, NodeDefinition> = {
   tenant: {
     cacheKey: () => "tenant",
-    fetchDetails: async (_node, ctx) => ctx.graph.listSites(),
+    fetchDetails: async (_node, ctx) => {
+      const [org, rootSite] = await Promise.all([
+        ctx.graph.getOrganization(),
+        ctx.graph.getRootSite(),
+      ]);
+      const sites = await ctx.graph.listSites();
+      return {
+        displayName: (org as Record<string, unknown>).displayName ?? "Unknown",
+        tenantId: (org as Record<string, unknown>).id,
+        verifiedDomains: (org as Record<string, unknown>).verifiedDomains,
+        rootSiteUrl: (rootSite as Record<string, unknown>).webUrl,
+        rootSiteId: (rootSite as Record<string, unknown>).id,
+        totalSites: sites.length,
+        createdDateTime: (org as Record<string, unknown>).createdDateTime,
+        country: (org as Record<string, unknown>).country,
+        preferredLanguage: (org as Record<string, unknown>).preferredLanguage,
+      };
+    },
     fetchChildren: async (_node, ctx) => {
       const sites = await ctx.graph.listSites();
       return sites.map((site: Record<string, unknown>) => ({

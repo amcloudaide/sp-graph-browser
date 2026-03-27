@@ -34,8 +34,26 @@ export class GraphClient {
     return this.client.api(endpoint).get();
   }
 
+  /** List all sites using getAllSites (returns all sites including Teams) */
   async listSites() {
-    return this.getAll<Record<string, unknown>>("/sites?search=*");
+    try {
+      // getAllSites returns all sites in the tenant (requires Sites.Read.All)
+      return await this.getAll<Record<string, unknown>>("/sites/getAllSites");
+    } catch {
+      // Fallback to search if getAllSites is not available
+      return this.getAll<Record<string, unknown>>("/sites?search=*");
+    }
+  }
+
+  /** Get tenant/organization info */
+  async getOrganization() {
+    const orgs = await this.getAll<Record<string, unknown>>("/organization");
+    return orgs[0] ?? {};
+  }
+
+  /** Get the root site */
+  async getRootSite() {
+    return this.get<Record<string, unknown>>("/sites/root");
   }
 
   async getSite(siteId: string) {
