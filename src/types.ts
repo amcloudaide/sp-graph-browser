@@ -46,6 +46,7 @@ export interface AppSettings {
   cacheTtlMinutes: number;
   customClientId: string | null;
   customTenantId: string | null;
+  proxyUrl: string | null;
   theme: "light" | "dark" | "system";
   defaultViewMode: ViewMode;
 }
@@ -54,6 +55,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cacheTtlMinutes: 30,
   customClientId: null,
   customTenantId: null,
+  proxyUrl: null,
   theme: "system",
   defaultViewMode: "properties",
 };

@@ -7,14 +7,31 @@ import { graphScopes } from "../auth/msalConfig";
 
 export class GraphClient {
   private client: Client;
+  private msalInstance: PublicClientApplication;
+  private account: AccountInfo;
+  private proxyUrl: string | null = null;
 
   constructor(msalInstance: PublicClientApplication, account: AccountInfo) {
+    this.msalInstance = msalInstance;
+    this.account = account;
     const authProvider = new AuthCodeMSALBrowserAuthenticationProvider(msalInstance, {
       account,
       interactionType: InteractionType.Popup,
       scopes: graphScopes,
     });
     this.client = Client.initWithMiddleware({ authProvider });
+  }
+
+  setProxyUrl(url: string | null) {
+    this.proxyUrl = url;
+  }
+
+  private async getAccessToken(): Promise<string> {
+    const response = await this.msalInstance.acquireTokenSilent({
+      scopes: graphScopes,
+      account: this.account,
+    });
+    return response.accessToken;
   }
 
   async getAll<T>(endpoint: string): Promise<T[]> {
@@ -37,6 +54,31 @@ export class GraphClient {
   /** List all sites — uses multiple search queries to maximize coverage.
    *  Note: getAllSites() only supports application permissions, not delegated. */
   async listSites() {
+    // Approach 1: Use proxy if configured
+    if (this.proxyUrl) {
+      try {
+        console.log("[SP Graph Browser] Calling proxy for getAllSites...");
+        const token = await this.getAccessToken();
+        const response = await fetch(`${this.proxyUrl}/api/getAllSites`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`Proxy ${response.status}: ${response.statusText}`);
+        }
+        const data = await response.json();
+        const sites = data.sites as Record<string, unknown>[];
+        console.log(`[SP Graph Browser] Proxy returned ${sites.length} sites`);
+        return sites;
+      } catch (e) {
+        console.warn("[SP Graph Browser] Proxy failed, falling back to search:", e);
+      }
+    }
+
+    // Approach 2: search=* with multiple queries
     const seen = new Map<string, Record<string, unknown>>();
 
     // Run multiple search queries to maximize site discovery

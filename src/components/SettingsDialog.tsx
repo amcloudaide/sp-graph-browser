@@ -87,6 +87,15 @@ export function SettingsDialog({ settings, onSave }: SettingsDialogProps) {
                 placeholder="Leave blank for default"
               />
             </div>
+            <div>
+              <Label htmlFor="proxyUrl">Proxy URL (optional)</Label>
+              <Input
+                id="proxyUrl"
+                value={draft.proxyUrl ?? ""}
+                onChange={(_, data) => setDraft({ ...draft, proxyUrl: data.value || null })}
+                placeholder="https://your-function.azurewebsites.net"
+              />
+            </div>
           </div>
         </DialogBody>
         <DialogActions>

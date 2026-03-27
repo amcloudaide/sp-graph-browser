@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { useMsal } from "@azure/msal-react";
 import type { PublicClientApplication } from "@azure/msal-browser";
 import { Button, Tooltip } from "@fluentui/react-components";
@@ -45,6 +45,12 @@ export default function App() {
     if (!isAuthenticated || !account) return null;
     return new GraphClient(instance as PublicClientApplication, account);
   }, [isAuthenticated, account, instance]);
+
+  useEffect(() => {
+    if (graphClient) {
+      graphClient.setProxyUrl(settings.proxyUrl);
+    }
+  }, [graphClient, settings.proxyUrl]);
 
   const spRestClient = useMemo(() => {
     if (!isAuthenticated || !account || !tenantName) return null;
