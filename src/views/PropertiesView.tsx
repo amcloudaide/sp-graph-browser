@@ -14,6 +14,21 @@ interface PropertiesViewProps {
   data: unknown;
 }
 
+/** Flatten nested objects into dot-notation key-value pairs */
+function flattenObject(obj: Record<string, unknown>, prefix = ""): [string, unknown][] {
+  const entries: [string, unknown][] = [];
+  for (const [key, value] of Object.entries(obj)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (fullKey.startsWith("@odata") || fullKey.startsWith("_")) continue;
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      entries.push(...flattenObject(value as Record<string, unknown>, fullKey));
+    } else {
+      entries.push([fullKey, value]);
+    }
+  }
+  return entries;
+}
+
 function formatValue(key: string, value: unknown): ReactNode {
   if (value === null || value === undefined) return <span style={{ color: "#666" }}>—</span>;
   if (typeof value === "boolean") {
@@ -23,12 +38,34 @@ function formatValue(key: string, value: unknown): ReactNode {
     if (value.startsWith("http://") || value.startsWith("https://")) {
       return <Link href={value} target="_blank">{value}</Link>;
     }
-    // Highlight sharing capabilities
     if (key.toLowerCase().includes("sharing") && value.includes("External")) {
       return <Badge appearance="filled" color="warning">{value}</Badge>;
     }
   }
-  if (typeof value === "object") return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span style={{ color: "#666" }}>[]</span>;
+    // For arrays of simple objects, show a compact summary
+    return (
+      <span style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+        {value.map((item, i) => {
+          if (typeof item === "object" && item !== null) {
+            // Show the most useful field (name, displayName, or first string value)
+            const obj = item as Record<string, unknown>;
+            const label = obj.displayName ?? obj.name ?? obj.value ?? obj.id ?? JSON.stringify(obj);
+            return <span key={i}>{i > 0 ? ", " : ""}{String(label)}</span>;
+          }
+          return <span key={i}>{i > 0 ? ", " : ""}{String(item)}</span>;
+        })}
+      </span>
+    );
+  }
+  if (typeof value === "object") {
+    // Should not happen after flattening, but handle gracefully
+    const obj = value as Record<string, unknown>;
+    const label = obj.displayName ?? obj.name ?? obj.email ?? obj.id;
+    if (label) return String(label);
+    return JSON.stringify(value);
+  }
   return String(value);
 }
 
@@ -40,9 +77,7 @@ export function PropertiesView({ data }: PropertiesViewProps) {
     return <p>{data.length} items — switch to Table view for details</p>;
   }
 
-  const entries = Object.entries(data as Record<string, unknown>).filter(
-    ([key]) => !key.startsWith("@odata") && !key.startsWith("_")
-  );
+  const entries = flattenObject(data as Record<string, unknown>);
 
   return (
     <Table size="small" aria-label="Properties">

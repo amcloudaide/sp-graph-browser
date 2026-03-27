@@ -37,8 +37,17 @@ export class GraphClient {
   /** List all sites using getAllSites (returns all sites including Teams) */
   async listSites() {
     try {
-      // getAllSites returns all sites in the tenant (requires Sites.Read.All)
-      return await this.getAll<Record<string, unknown>>("/sites/getAllSites");
+      // getAllSites on beta returns all sites in the tenant (requires Sites.Read.All)
+      const results: Record<string, unknown>[] = [];
+      let url: string | null = "/sites/getAllSites?$top=999";
+      while (url) {
+        const response = await this.client.api(url).version("beta").get();
+        if (response.value) {
+          results.push(...response.value);
+        }
+        url = response["@odata.nextLink"] ?? null;
+      }
+      return results;
     } catch {
       // Fallback to search if getAllSites is not available
       return this.getAll<Record<string, unknown>>("/sites?search=*");
