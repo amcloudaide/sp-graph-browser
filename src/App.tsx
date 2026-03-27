@@ -4,6 +4,7 @@ import type { PublicClientApplication } from "@azure/msal-browser";
 import { Button, Tooltip } from "@fluentui/react-components";
 import { SignOut20Regular, Person20Regular } from "@fluentui/react-icons";
 import { useAuth } from "./auth/AuthProvider";
+import { SpRestClient } from "./data/spRestClient";
 import { LandingPage } from "./components/LandingPage";
 import { TreePanel } from "./tree/TreePanel";
 import { Toolbar } from "./components/Toolbar";
@@ -31,7 +32,7 @@ function loadSettings(): AppSettings {
 const cacheStore = new CacheStore();
 
 export default function App() {
-  const { isAuthenticated, account, logout } = useAuth();
+  const { isAuthenticated, account, tenantName, logout } = useAuth();
   const { instance } = useMsal();
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [viewMode, setViewMode] = useState<ViewMode>(settings.defaultViewMode);
@@ -45,6 +46,11 @@ export default function App() {
     return new GraphClient(instance as PublicClientApplication, account);
   }, [isAuthenticated, account, instance]);
 
+  const spRestClient = useMemo(() => {
+    if (!isAuthenticated || !account || !tenantName) return null;
+    return new SpRestClient(instance as PublicClientApplication, account, tenantName);
+  }, [isAuthenticated, account, tenantName, instance]);
+
   const {
     nodes,
     selectedNodeId,
@@ -53,7 +59,7 @@ export default function App() {
     expandNode,
     selectNode,
     refreshNode,
-  } = useTreeData(graphClient, null, cacheStore, settings);
+  } = useTreeData(graphClient, spRestClient, cacheStore, settings);
 
   if (!isAuthenticated) {
     return <LandingPage />;

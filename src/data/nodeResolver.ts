@@ -46,7 +46,30 @@ const definitions: Record<NodeType, NodeDefinition> = {
       };
     },
     fetchChildren: async (_node, ctx) => {
-      const sites = await ctx.graph.listSites();
+      // Try SP Admin API first (returns ALL sites), fall back to Graph search
+      let sites: Record<string, unknown>[] = [];
+      let usedAdmin = false;
+      if (ctx.spRest) {
+        try {
+          const adminSites = await ctx.spRest.listAllSites();
+          if (adminSites.length > 0) {
+            // Map SP Admin format to Graph-like format for consistency
+            sites = adminSites.map((s) => ({
+              id: (s.SiteId ?? s.siteId ?? s.id) as string,
+              displayName: (s.Title ?? s.title ?? s.displayName) as string,
+              webUrl: (s.Url ?? s.url ?? s.webUrl) as string,
+              _adminProps: s, // Keep original props for detail view
+            }));
+            usedAdmin = true;
+            console.log(`[SP Graph Browser] Using SP Admin API: ${sites.length} sites`);
+          }
+        } catch (e) {
+          console.warn("[SP Graph Browser] SP Admin API failed, falling back to Graph:", e);
+        }
+      }
+      if (!usedAdmin) {
+        sites = await ctx.graph.listSites();
+      }
       return sites.map((site: Record<string, unknown>) => ({
         id: makeId(["site", site.id as string]),
         parentId: "tenant",

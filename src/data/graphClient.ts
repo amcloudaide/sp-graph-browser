@@ -34,7 +34,8 @@ export class GraphClient {
     return this.client.api(endpoint).get();
   }
 
-  /** List all sites — getAllSites (beta) with fallback to search */
+  /** List all sites — getAllSites (beta) with fallback to search.
+   *  For full listing, use SpRestClient.listAllSites() which uses the SP Admin API. */
   async listSites() {
     // Approach 1: getAllSites on beta — returns ALL sites including Teams
     try {
