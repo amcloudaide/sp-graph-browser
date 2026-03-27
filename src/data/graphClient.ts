@@ -34,22 +34,51 @@ export class GraphClient {
     return this.client.api(endpoint).get();
   }
 
-  /** List all sites — uses search with full pagination */
+  /** List all sites — getAllSites (beta) with fallback to search */
   async listSites() {
+    // Approach 1: getAllSites on beta — returns ALL sites including Teams
+    try {
+      const results: Record<string, unknown>[] = [];
+      let page = 0;
+      let url: string | null = "/sites/getAllSites?$top=999";
+
+      while (url) {
+        page++;
+        console.log(`[SP Graph Browser] getAllSites page ${page}...`);
+        const response: Record<string, unknown> = await this.client.api(url).version("beta").get();
+        const value = response.value as Record<string, unknown>[] | undefined;
+        if (value) {
+          results.push(...value);
+        }
+        const nextLink: string | null = (response["@odata.nextLink"] as string) ?? null;
+        if (nextLink) {
+          // nextLink from beta is a full URL — strip base to use with SDK
+          url = nextLink.replace("https://graph.microsoft.com/beta", "");
+        } else {
+          url = null;
+        }
+      }
+
+      console.log(`[SP Graph Browser] getAllSites returned ${results.length} sites (${page} pages)`);
+      if (results.length > 0) return results;
+    } catch (e) {
+      console.warn("[SP Graph Browser] getAllSites (beta) failed:", e);
+    }
+
+    // Approach 2: search=* with pagination (v1.0)
     const results: Record<string, unknown>[] = [];
     let url: string | null = "/sites?search=*";
     let page = 0;
 
     while (url) {
       page++;
-      console.log(`[SP Graph Browser] Fetching sites page ${page}...`);
+      console.log(`[SP Graph Browser] search page ${page}...`);
       const response: Record<string, unknown> = await this.client.api(url).get();
       const value = response.value as Record<string, unknown>[] | undefined;
       if (value) {
         results.push(...value);
       }
       const nextLink: string | null = (response["@odata.nextLink"] as string) ?? null;
-      // nextLink is a full URL — extract the path+query for the SDK
       if (nextLink) {
         url = nextLink.replace("https://graph.microsoft.com/v1.0", "");
       } else {
@@ -57,7 +86,7 @@ export class GraphClient {
       }
     }
 
-    console.log(`[SP Graph Browser] Total sites found: ${results.length} (${page} pages)`);
+    console.log(`[SP Graph Browser] search=* returned ${results.length} sites (${page} pages)`);
     return results;
   }
 
