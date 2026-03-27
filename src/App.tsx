@@ -1,6 +1,8 @@
 import { useMemo, useState, useCallback } from "react";
 import { useMsal } from "@azure/msal-react";
 import type { PublicClientApplication } from "@azure/msal-browser";
+import { Button, Tooltip } from "@fluentui/react-components";
+import { SignOut20Regular, Person20Regular } from "@fluentui/react-icons";
 import { useAuth } from "./auth/AuthProvider";
 import { LandingPage } from "./components/LandingPage";
 import { TreePanel } from "./tree/TreePanel";
@@ -29,7 +31,7 @@ function loadSettings(): AppSettings {
 const cacheStore = new CacheStore();
 
 export default function App() {
-  const { isAuthenticated, account } = useAuth();
+  const { isAuthenticated, account, logout } = useAuth();
   const { instance } = useMsal();
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [viewMode, setViewMode] = useState<ViewMode>(settings.defaultViewMode);
@@ -105,8 +107,24 @@ export default function App() {
               onBreadcrumbClick={selectNode}
             />
           </div>
-          <div style={{ padding: "4px 8px" }}>
+          <div style={{ padding: "4px 8px", display: "flex", alignItems: "center", gap: 4 }}>
             <SettingsDialog settings={settings} onSave={handleSettingsChange} />
+            <Tooltip content={account?.username ?? ""} relationship="label">
+              <Button icon={<Person20Regular />} appearance="subtle" size="small" />
+            </Tooltip>
+            <Tooltip content="Sign out and clear session" relationship="label">
+              <Button
+                icon={<SignOut20Regular />}
+                appearance="subtle"
+                size="small"
+                onClick={() => {
+                  // Clear all cached auth state
+                  localStorage.clear();
+                  cacheStore.clear();
+                  logout();
+                }}
+              />
+            </Tooltip>
           </div>
         </div>
         <div style={{ flex: 1, padding: 16, overflow: "auto" }}>
