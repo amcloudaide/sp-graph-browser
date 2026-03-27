@@ -40,7 +40,7 @@ export class GraphClient {
     try {
       const results: Record<string, unknown>[] = [];
       let page = 0;
-      let url: string | null = "/sites/getAllSites?$top=999";
+      let url: string | null = "/sites/getAllSites()?$top=999";
 
       while (url) {
         page++;
