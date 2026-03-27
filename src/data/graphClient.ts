@@ -34,30 +34,31 @@ export class GraphClient {
     return this.client.api(endpoint).get();
   }
 
-  /** List all sites — tries multiple approaches for completeness */
+  /** List all sites — uses search with full pagination */
   async listSites() {
-    // Approach 1: getAllSites (v1.0, GA since late 2024)
-    try {
-      const results = await this.getAll<Record<string, unknown>>("/sites/getAllSites");
-      if (results.length > 0) {
-        console.log(`[SP Graph Browser] getAllSites returned ${results.length} sites`);
-        return results;
+    const results: Record<string, unknown>[] = [];
+    let url: string | null = "/sites?search=*";
+    let page = 0;
+
+    while (url) {
+      page++;
+      console.log(`[SP Graph Browser] Fetching sites page ${page}...`);
+      const response: Record<string, unknown> = await this.client.api(url).get();
+      const value = response.value as Record<string, unknown>[] | undefined;
+      if (value) {
+        results.push(...value);
       }
-    } catch (e) {
-      console.warn("[SP Graph Browser] getAllSites failed, trying search:", e);
+      const nextLink: string | null = (response["@odata.nextLink"] as string) ?? null;
+      // nextLink is a full URL — extract the path+query for the SDK
+      if (nextLink) {
+        url = nextLink.replace("https://graph.microsoft.com/v1.0", "");
+      } else {
+        url = null;
+      }
     }
 
-    // Approach 2: search=* with pagination
-    try {
-      const results = await this.getAll<Record<string, unknown>>("/sites?search=*&$top=999");
-      console.log(`[SP Graph Browser] search=* returned ${results.length} sites`);
-      return results;
-    } catch (e) {
-      console.warn("[SP Graph Browser] search failed, trying empty search:", e);
-    }
-
-    // Approach 3: search with empty string
-    return this.getAll<Record<string, unknown>>("/sites?search=");
+    console.log(`[SP Graph Browser] Total sites found: ${results.length} (${page} pages)`);
+    return results;
   }
 
   /** Get tenant/organization info */
