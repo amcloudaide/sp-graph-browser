@@ -34,24 +34,30 @@ export class GraphClient {
     return this.client.api(endpoint).get();
   }
 
-  /** List all sites using getAllSites (returns all sites including Teams) */
+  /** List all sites — tries multiple approaches for completeness */
   async listSites() {
+    // Approach 1: getAllSites (v1.0, GA since late 2024)
     try {
-      // getAllSites on beta returns all sites in the tenant (requires Sites.Read.All)
-      const results: Record<string, unknown>[] = [];
-      let url: string | null = "/sites/getAllSites?$top=999";
-      while (url) {
-        const response = await this.client.api(url).version("beta").get();
-        if (response.value) {
-          results.push(...response.value);
-        }
-        url = response["@odata.nextLink"] ?? null;
+      const results = await this.getAll<Record<string, unknown>>("/sites/getAllSites");
+      if (results.length > 0) {
+        console.log(`[SP Graph Browser] getAllSites returned ${results.length} sites`);
+        return results;
       }
-      return results;
-    } catch {
-      // Fallback to search if getAllSites is not available
-      return this.getAll<Record<string, unknown>>("/sites?search=*");
+    } catch (e) {
+      console.warn("[SP Graph Browser] getAllSites failed, trying search:", e);
     }
+
+    // Approach 2: search=* with pagination
+    try {
+      const results = await this.getAll<Record<string, unknown>>("/sites?search=*&$top=999");
+      console.log(`[SP Graph Browser] search=* returned ${results.length} sites`);
+      return results;
+    } catch (e) {
+      console.warn("[SP Graph Browser] search failed, trying empty search:", e);
+    }
+
+    // Approach 3: search with empty string
+    return this.getAll<Record<string, unknown>>("/sites?search=");
   }
 
   /** Get tenant/organization info */
