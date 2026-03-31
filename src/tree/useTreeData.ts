@@ -54,7 +54,7 @@ export function useTreeData(
       updateNode(nodeId, { isLoading: true });
 
       try {
-        const ctx: FetchContext = { graph, spRest, cache, ttlMinutes: settings.cacheTtlMinutes };
+        const ctx: FetchContext = { graph, spRest, cache, ttlMinutes: settings.cacheTtlMinutes, enableFilesAccess: settings.enableFilesAccess ?? false };
 
         let children: TreeNodeData[];
         if (isCached) {
@@ -100,7 +100,7 @@ export function useTreeData(
       }
 
       try {
-        const ctx: FetchContext = { graph, spRest, cache, ttlMinutes: settings.cacheTtlMinutes };
+        const ctx: FetchContext = { graph, spRest, cache, ttlMinutes: settings.cacheTtlMinutes, enableFilesAccess: settings.enableFilesAccess ?? false };
         const data = await definition.fetchDetails(node, ctx);
         await cache.set(cacheKey, data, node.nodeType);
         setSelectedNodeData(data);

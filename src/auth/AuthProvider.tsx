@@ -15,6 +15,8 @@ interface AuthContextValue {
   logout: () => void;
   getGraphToken: () => Promise<string>;
   getSharePointToken: () => Promise<string>;
+  /** Request incremental consent for additional scopes (e.g., Files.Read.All) */
+  requestAdditionalScopes: (scopes: string[]) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -93,6 +95,12 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
     }
   }, [instance, account, spTenantName]);
 
+  const requestAdditionalScopes = useCallback(async (scopes: string[]) => {
+    if (!account) throw new Error("Not authenticated");
+    // Use popup to request incremental consent for new scopes
+    await instance.acquireTokenPopup({ scopes, account });
+  }, [instance, account]);
+
   const value: AuthContextValue = {
     isAuthenticated,
     account,
@@ -101,6 +109,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
     logout,
     getGraphToken,
     getSharePointToken,
+    requestAdditionalScopes,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

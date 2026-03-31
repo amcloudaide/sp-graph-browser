@@ -51,6 +51,8 @@ export interface AppSettings {
   proxyUrl: string | null;
   theme: "light" | "dark" | "system";
   defaultViewMode: ViewMode;
+  /** Request Files.Read.All for sharing links and drive permissions */
+  enableFilesAccess: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -60,4 +62,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   proxyUrl: null,
   theme: "system",
   defaultViewMode: "properties",
+  enableFilesAccess: false,
 };

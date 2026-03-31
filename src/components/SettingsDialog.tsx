@@ -11,8 +11,12 @@ import {
   Label,
   Select,
   SpinButton,
+  Checkbox,
+  Body1,
 } from "@fluentui/react-components";
 import { Settings20Regular } from "@fluentui/react-icons";
+import { useAuth } from "../auth/AuthProvider";
+import { graphScopesFiles } from "../auth/msalConfig";
 import type { AppSettings, ViewMode } from "../types";
 
 interface SettingsDialogProps {
@@ -21,15 +25,30 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ settings, onSave }: SettingsDialogProps) {
+  const { requestAdditionalScopes } = useAuth();
   const [draft, setDraft] = useState(settings);
   const [open, setOpen] = useState(false);
+  const [consentPending, setConsentPending] = useState(false);
 
   const handleOpen = () => {
     setDraft(settings);
     setOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // If files access was just enabled, request incremental consent
+    if (draft.enableFilesAccess && !settings.enableFilesAccess) {
+      setConsentPending(true);
+      try {
+        await requestAdditionalScopes(graphScopesFiles);
+      } catch (e) {
+        console.warn("Consent for Files.Read.All failed:", e);
+        // Revert the toggle if consent was denied
+        draft.enableFilesAccess = false;
+      } finally {
+        setConsentPending(false);
+      }
+    }
     onSave(draft);
     localStorage.setItem("sp-graph-browser-settings", JSON.stringify(draft));
     setOpen(false);
@@ -96,13 +115,27 @@ export function SettingsDialog({ settings, onSave }: SettingsDialogProps) {
                 placeholder="https://your-function.azurewebsites.net"
               />
             </div>
+            <div style={{ borderTop: "1px solid var(--colorNeutralStroke2)", paddingTop: 12 }}>
+              <Label style={{ fontWeight: 600, marginBottom: 8, display: "block" }}>Additional Permissions</Label>
+              <Checkbox
+                checked={draft.enableFilesAccess}
+                onChange={(_, data) => setDraft({ ...draft, enableFilesAccess: !!data.checked })}
+                label="Enable Files.Read.All (sharing links, drive permissions)"
+              />
+              <Body1 style={{ fontSize: 11, color: "var(--colorNeutralForeground3)", marginTop: 4, marginLeft: 28 }}>
+                Requires the Files.Read.All delegated permission on your app registration.
+                Enabling this will trigger a consent popup.
+              </Body1>
+            </div>
           </div>
         </DialogBody>
         <DialogActions>
           <DialogTrigger>
             <Button appearance="secondary">Cancel</Button>
           </DialogTrigger>
-          <Button appearance="primary" onClick={handleSave}>Save</Button>
+          <Button appearance="primary" onClick={handleSave} disabled={consentPending}>
+            {consentPending ? "Requesting consent..." : "Save"}
+          </Button>
         </DialogActions>
       </DialogSurface>
     </Dialog>

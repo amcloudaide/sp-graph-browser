@@ -9,6 +9,7 @@ export interface FetchContext {
   spRest: SpRestClient | null;
   cache: CacheStore;
   ttlMinutes: number;
+  enableFilesAccess: boolean;
 }
 
 export interface NodeDefinition {
@@ -326,21 +327,26 @@ const definitions: Record<NodeType, NodeDefinition> = {
   permissions: {
     cacheKey: (node) => `permissions:${node.siteId}`,
     fetchDetails: async (node, ctx) => {
-      // Graph /sites/{id}/permissions requires Sites.FullControl.All (too privileged).
-      // Instead, get the site details which include sharing capability and owner info,
-      // plus drive root permissions (sharing links) which work with Sites.Read.All.
-      const [site, sharingLinks] = await Promise.all([
-        ctx.graph.getSite(node.siteId!),
-        ctx.graph.listSharingLinks(node.siteId!).catch(() => []),
-      ]);
+      const site = await ctx.graph.getSite(node.siteId!);
       const s = site as Record<string, unknown>;
-      return {
+      const result: Record<string, unknown> = {
         owner: s.owner,
         sharingCapability: s.sharingCapability,
         externalSharingEnabled: s.sharingCapability !== "Disabled",
-        sharingLinksCount: (sharingLinks as unknown[]).length,
-        note: "Full role assignments (Owner/Member/Visitor groups) require Sites.FullControl.All or SP REST via proxy. Showing available sharing info.",
       };
+
+      if (ctx.enableFilesAccess) {
+        try {
+          const sharingLinks = await ctx.graph.listSharingLinks(node.siteId!);
+          result.sharingLinksCount = sharingLinks.length;
+        } catch {
+          result.sharingLinksNote = "Failed to retrieve sharing links — check Files.Read.All permission.";
+        }
+      } else {
+        result.sharingLinksNote = "Enable 'Files.Read.All' in Settings to view sharing links.";
+      }
+
+      return result;
     },
     fetchChildren: async (node, _ctx) => {
       const siteId = node.siteId!;
@@ -364,10 +370,13 @@ const definitions: Record<NodeType, NodeDefinition> = {
   sharingLinks: {
     cacheKey: (node) => `sharingLinks:${node.siteId}`,
     fetchDetails: async (node, ctx) => {
+      if (!ctx.enableFilesAccess) {
+        return { note: "Enable 'Files.Read.All' in Settings to view sharing links." };
+      }
       try {
         return await ctx.graph.listSharingLinks(node.siteId!);
       } catch {
-        return { note: "Sharing links require additional permissions (Sites.FullControl.All or drive access). Unable to retrieve." };
+        return { note: "Failed to retrieve sharing links. Ensure Files.Read.All is granted and admin-consented on your app registration." };
       }
     },
     fetchChildren: async () => [],

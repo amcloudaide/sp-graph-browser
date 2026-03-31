@@ -23,7 +23,17 @@ export function getMsalConfig(customClientId?: string | null, customTenantId?: s
   };
 }
 
-export const graphScopes = ["User.Read", "Sites.Read.All", "TermStore.Read.All"];
+export const graphScopesBase = ["User.Read", "Sites.Read.All", "TermStore.Read.All"];
+export const graphScopesFiles = ["Files.Read.All"];
+
+export function getGraphScopes(enableFilesAccess = false): string[] {
+  return enableFilesAccess
+    ? [...graphScopesBase, ...graphScopesFiles]
+    : graphScopesBase;
+}
+
+/** Default scopes for initial login (without files) */
+export const graphScopes = graphScopesBase;
 
 export function getSharePointScopes(tenantName: string): string[] {
   return [`https://${tenantName}.sharepoint.com/AllSites.Read`];
