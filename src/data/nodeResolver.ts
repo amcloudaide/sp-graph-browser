@@ -314,18 +314,9 @@ const definitions: Record<NodeType, NodeDefinition> = {
   permissions: {
     cacheKey: (node) => `permissions:${node.siteId}`,
     fetchDetails: async (node, ctx) => {
-      // Try SP REST for real role assignments (groups + members), fall back to Graph
-      if (ctx.spRest) {
-        try {
-          const siteEntry = await ctx.cache.get(`site:${node.siteId}`);
-          const siteUrl = (siteEntry?.data as Record<string, unknown>)?.webUrl as string;
-          if (siteUrl) {
-            return ctx.spRest.listRoleAssignments(siteUrl);
-          }
-        } catch (e) {
-          console.warn("[SP Graph Browser] SP REST permissions failed:", e);
-        }
-      }
+      // Graph permissions endpoint — returns app permissions and sharing info
+      // Note: SP REST roleassignments would give richer data (user/group roles)
+      // but CORS blocks it from browser SPAs hosted on different origins
       return ctx.graph.listSitePermissions(node.siteId!);
     },
     fetchChildren: async (node, _ctx) => {
