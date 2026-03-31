@@ -32,21 +32,33 @@ const definitions: Record<NodeType, NodeDefinition> = {
         ctx.graph.getOrganization(),
         ctx.graph.getRootSite(),
       ]);
-      const sites = await ctx.graph.listSites();
+      const allSites = await ctx.graph.listSites();
+      const spSites = allSites.filter((s: Record<string, unknown>) => {
+        const url = (s.webUrl as string) ?? "";
+        return !url.includes("-my.sharepoint.com/personal/");
+      });
       return {
         displayName: (org as Record<string, unknown>).displayName ?? "Unknown",
         tenantId: (org as Record<string, unknown>).id,
         verifiedDomains: (org as Record<string, unknown>).verifiedDomains,
         rootSiteUrl: (rootSite as Record<string, unknown>).webUrl,
         rootSiteId: (rootSite as Record<string, unknown>).id,
-        totalSites: sites.length,
+        totalSites: allSites.length,
+        sharePointSites: spSites.length,
+        oneDriveSites: allSites.length - spSites.length,
         createdDateTime: (org as Record<string, unknown>).createdDateTime,
         country: (org as Record<string, unknown>).country,
         preferredLanguage: (org as Record<string, unknown>).preferredLanguage,
       };
     },
     fetchChildren: async (_node, ctx) => {
-      const sites = await ctx.graph.listSites();
+      const allSites = await ctx.graph.listSites();
+      // Filter out OneDrive personal sites (hosted on *-my.sharepoint.com/personal/)
+      const sites = allSites.filter((site: Record<string, unknown>) => {
+        const url = (site.webUrl as string) ?? "";
+        return !url.includes("-my.sharepoint.com/personal/");
+      });
+      console.log(`[SP Graph Browser] Showing ${sites.length} SP sites (filtered ${allSites.length - sites.length} OneDrive sites)`);
       return sites.map((site: Record<string, unknown>) => ({
         id: makeId(["site", site.id as string]),
         parentId: "tenant",
