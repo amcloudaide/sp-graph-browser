@@ -329,12 +329,22 @@ const definitions: Record<NodeType, NodeDefinition> = {
     fetchDetails: async (node, ctx) => {
       const site = await ctx.graph.getSite(node.siteId!);
       const s = site as Record<string, unknown>;
-      return {
+      const result: Record<string, unknown> = {
         owner: s.owner,
         sharingCapability: s.sharingCapability,
         externalSharingEnabled: s.sharingCapability !== "Disabled",
-        note: "Detailed role assignments (Owner/Member/Visitor) require Sites.FullControl.All which is too privileged for a read-only tool. Showing site sharing configuration.",
       };
+
+      // Try proxy for detailed permissions (needs Sites.FullControl.All app permission)
+      try {
+        const perms = await ctx.graph.callViaProxy<unknown[]>(`/sites/${node.siteId}/permissions`, "v1.0");
+        result.appPermissions = perms;
+        result.appPermissionsCount = Array.isArray(perms) ? perms.length : 0;
+      } catch {
+        result.appPermissionsNote = "Configure proxy with Sites.FullControl.All to view app permissions.";
+      }
+
+      return result;
     },
     fetchChildren: async (node, _ctx) => {
       const siteId = node.siteId!;
@@ -357,12 +367,17 @@ const definitions: Record<NodeType, NodeDefinition> = {
 
   sharingLinks: {
     cacheKey: (node) => `sharingLinks:${node.siteId}`,
-    fetchDetails: async (_node, _ctx) => {
-      // /drive/items/root/permissions only works with application permissions (Files.Read.All as app)
-      // not with delegated auth. This is a Graph API limitation for SPAs.
-      return {
-        note: "Sharing link enumeration requires application-only auth (Files.Read.All as application permission). This cannot be done from a browser SPA with delegated auth. Consider extending the proxy to support this endpoint.",
-      };
+    fetchDetails: async (node, ctx) => {
+      // Try proxy for sharing links (needs Files.Read.All app permission)
+      try {
+        return await ctx.graph.callViaProxy<unknown[]>(
+          `/sites/${node.siteId}/drive/items/root/permissions`, "v1.0"
+        );
+      } catch {
+        return {
+          note: "Sharing links require the proxy with Files.Read.All (application) permission. Set the Proxy URL in Settings and ensure Files.Read.All is granted on the proxy's app registration.",
+        };
+      }
     },
     fetchChildren: async () => [],
   },

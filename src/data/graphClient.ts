@@ -34,6 +34,26 @@ export class GraphClient {
     return response.accessToken;
   }
 
+  /** Call a Graph endpoint via the proxy (app-only auth). Returns the raw result. */
+  async callViaProxy<T>(path: string, apiVersion = "beta"): Promise<T> {
+    if (!this.proxyUrl) throw new Error("Proxy URL not configured");
+    const token = await this.getAccessToken();
+    const response = await fetch(`${this.proxyUrl}/api/graphProxy`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ path, apiVersion }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(`Proxy ${response.status}: ${(err as Record<string, string>).error ?? response.statusText}`);
+    }
+    const result = await response.json() as { data: T; isCollection: boolean };
+    return result.data;
+  }
+
   async getAll<T>(endpoint: string): Promise<T[]> {
     const results: T[] = [];
     let url: string | null = endpoint;
@@ -54,26 +74,28 @@ export class GraphClient {
   /** List all sites — uses multiple search queries to maximize coverage.
    *  Note: getAllSites() only supports application permissions, not delegated. */
   async listSites() {
-    // Approach 1: Use proxy if configured
+    // Approach 1: Use proxy if configured (tries new graphProxy, falls back to legacy getAllSites)
     if (this.proxyUrl) {
       try {
         console.log("[SP Graph Browser] Calling proxy for getAllSites...");
-        const token = await this.getAccessToken();
-        const response = await fetch(`${this.proxyUrl}/api/getAllSites`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
-        if (!response.ok) {
-          throw new Error(`Proxy ${response.status}: ${response.statusText}`);
-        }
-        const data = await response.json();
-        const sites = data.sites as Record<string, unknown>[];
+        const sites = await this.callViaProxy<Record<string, unknown>[]>("/sites/getAllSites()?$top=999");
         console.log(`[SP Graph Browser] Proxy returned ${sites.length} sites`);
         return sites;
       } catch (e) {
+        // Try legacy endpoint for backward compatibility
+        try {
+          const token = await this.getAccessToken();
+          const response = await fetch(`${this.proxyUrl}/api/getAllSites`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          });
+          if (response.ok) {
+            const data = await response.json();
+            const sites = data.sites as Record<string, unknown>[];
+            console.log(`[SP Graph Browser] Legacy proxy returned ${sites.length} sites`);
+            return sites;
+          }
+        } catch { /* fall through */ }
         console.warn("[SP Graph Browser] Proxy failed, falling back to search:", e);
       }
     }
