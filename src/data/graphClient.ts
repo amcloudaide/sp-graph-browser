@@ -172,6 +172,24 @@ export class GraphClient {
     return this.getAll<Record<string, unknown>>(`/sites/${siteId}/columns`);
   }
 
+  /** List drives (document libraries) for a site */
+  async listDrives(siteId: string) {
+    return this.getAll<Record<string, unknown>>(`/sites/${siteId}/drives`);
+  }
+
+  /** List children of a drive root or folder */
+  async listDriveChildren(siteId: string, driveId: string, itemId?: string) {
+    const path = itemId
+      ? `/sites/${siteId}/drives/${driveId}/items/${itemId}/children`
+      : `/sites/${siteId}/drives/${driveId}/root/children`;
+    return this.getAll<Record<string, unknown>>(path);
+  }
+
+  /** Get content type columns */
+  async listContentTypeColumns(siteId: string, contentTypeId: string) {
+    return this.getAll<Record<string, unknown>>(`/sites/${siteId}/contentTypes/${contentTypeId}/columns`);
+  }
+
   async listTermStoreGroups(siteId: string) {
     const response = await this.client.api(`/sites/${siteId}/termStore/groups`).version("beta").get();
     return response.value ?? [];

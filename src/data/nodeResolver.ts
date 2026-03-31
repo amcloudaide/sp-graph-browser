@@ -99,7 +99,7 @@ const definitions: Record<NodeType, NodeDefinition> = {
           nodeType: "permissions" as NodeType,
           resourceId: siteId,
           siteId,
-          hasChildren: false,
+          hasChildren: true,
           isLoaded: false,
           isLoading: false,
           isStale: false,
@@ -111,7 +111,7 @@ const definitions: Record<NodeType, NodeDefinition> = {
           nodeType: "siteContentTypes" as NodeType,
           resourceId: siteId,
           siteId,
-          hasChildren: false,
+          hasChildren: true,
           isLoaded: false,
           isLoading: false,
           isStale: false,
@@ -124,6 +124,18 @@ const definitions: Record<NodeType, NodeDefinition> = {
           resourceId: siteId,
           siteId,
           hasChildren: false,
+          isLoaded: false,
+          isLoading: false,
+          isStale: false,
+        },
+        {
+          id: makeId(["drives", siteId]),
+          parentId: node.id,
+          label: "Drives (Doc Libraries)",
+          nodeType: "drives" as NodeType,
+          resourceId: siteId,
+          siteId,
+          hasChildren: true,
           isLoaded: false,
           isLoading: false,
           isStale: false,
@@ -225,7 +237,7 @@ const definitions: Record<NodeType, NodeDefinition> = {
           resourceId: listId,
           siteId,
           listId,
-          hasChildren: false,
+          hasChildren: true,
           isLoaded: false,
           isLoading: false,
           isStale: false,
@@ -256,13 +268,41 @@ const definitions: Record<NodeType, NodeDefinition> = {
   contentTypes: {
     cacheKey: (node) => `contentTypes:${node.siteId}:${node.listId}`,
     fetchDetails: async (node, ctx) => ctx.graph.listListContentTypes(node.siteId!, node.listId!),
-    fetchChildren: async () => [],
+    fetchChildren: async (node, ctx) => {
+      const cts = await ctx.graph.listListContentTypes(node.siteId!, node.listId!);
+      return cts.map((ct: Record<string, unknown>) => ({
+        id: makeId(["contentType", node.siteId!, ct.id as string]),
+        parentId: node.id,
+        label: (ct.name as string) || (ct.id as string),
+        nodeType: "contentType" as NodeType,
+        resourceId: ct.id as string,
+        siteId: node.siteId,
+        hasChildren: true,
+        isLoaded: false,
+        isLoading: false,
+        isStale: false,
+      }));
+    },
   },
 
   contentType: {
-    cacheKey: (node) => `contentType:${node.resourceId}`,
+    cacheKey: (node) => `contentType:${node.siteId}:${node.resourceId}`,
     fetchDetails: async (node, ctx) => ctx.graph.get(`/sites/${node.siteId}/contentTypes/${node.resourceId}`),
-    fetchChildren: async () => [],
+    fetchChildren: async (node, ctx) => {
+      const cols = await ctx.graph.listContentTypeColumns(node.siteId!, node.resourceId);
+      return cols.map((col: Record<string, unknown>) => ({
+        id: makeId(["ctCol", node.siteId!, node.resourceId, col.id as string]),
+        parentId: node.id,
+        label: (col.displayName as string) || (col.name as string) || (col.id as string),
+        nodeType: "columns" as NodeType,
+        resourceId: col.id as string,
+        siteId: node.siteId,
+        hasChildren: false,
+        isLoaded: false,
+        isLoading: false,
+        isStale: false,
+      }));
+    },
   },
 
   views: {
@@ -273,8 +313,38 @@ const definitions: Record<NodeType, NodeDefinition> = {
 
   permissions: {
     cacheKey: (node) => `permissions:${node.siteId}`,
-    fetchDetails: async (node, ctx) => ctx.graph.listSitePermissions(node.siteId!),
-    fetchChildren: async () => [],
+    fetchDetails: async (node, ctx) => {
+      // Try SP REST for real role assignments (groups + members), fall back to Graph
+      if (ctx.spRest) {
+        try {
+          const siteEntry = await ctx.cache.get(`site:${node.siteId}`);
+          const siteUrl = (siteEntry?.data as Record<string, unknown>)?.webUrl as string;
+          if (siteUrl) {
+            return ctx.spRest.listRoleAssignments(siteUrl);
+          }
+        } catch (e) {
+          console.warn("[SP Graph Browser] SP REST permissions failed:", e);
+        }
+      }
+      return ctx.graph.listSitePermissions(node.siteId!);
+    },
+    fetchChildren: async (node, _ctx) => {
+      const siteId = node.siteId!;
+      return [
+        {
+          id: makeId(["sharingLinks", siteId]),
+          parentId: node.id,
+          label: "Sharing Links",
+          nodeType: "sharingLinks" as NodeType,
+          resourceId: siteId,
+          siteId,
+          hasChildren: false,
+          isLoaded: false,
+          isLoading: false,
+          isStale: false,
+        },
+      ];
+    },
   },
 
   sharingLinks: {
@@ -292,7 +362,21 @@ const definitions: Record<NodeType, NodeDefinition> = {
   siteContentTypes: {
     cacheKey: (node) => `siteContentTypes:${node.siteId}`,
     fetchDetails: async (node, ctx) => ctx.graph.listSiteContentTypes(node.siteId!),
-    fetchChildren: async () => [],
+    fetchChildren: async (node, ctx) => {
+      const cts = await ctx.graph.listSiteContentTypes(node.siteId!);
+      return cts.map((ct: Record<string, unknown>) => ({
+        id: makeId(["contentType", node.siteId!, ct.id as string]),
+        parentId: node.id,
+        label: (ct.name as string) || (ct.id as string),
+        nodeType: "contentType" as NodeType,
+        resourceId: ct.id as string,
+        siteId: node.siteId,
+        hasChildren: true,
+        isLoaded: false,
+        isLoading: false,
+        isStale: false,
+      }));
+    },
   },
 
   recycleBin: {
@@ -373,6 +457,54 @@ const definitions: Record<NodeType, NodeDefinition> = {
     fetchDetails: async (node, ctx) =>
       ctx.graph.get(`/sites/${node.siteId}/termStore/terms/${node.resourceId}`),
     fetchChildren: async () => [],
+  },
+
+  drives: {
+    cacheKey: (node) => `drives:${node.siteId}`,
+    fetchDetails: async (node, ctx) => ctx.graph.listDrives(node.siteId!),
+    fetchChildren: async (node, ctx) => {
+      const drives = await ctx.graph.listDrives(node.siteId!);
+      return drives.map((drive: Record<string, unknown>) => ({
+        id: makeId(["driveItem", node.siteId!, drive.id as string, "root"]),
+        parentId: node.id,
+        label: (drive.name as string) || (drive.id as string),
+        nodeType: "driveItem" as NodeType,
+        resourceId: "root",
+        siteId: node.siteId,
+        listId: drive.id as string, // reuse listId to store driveId
+        hasChildren: true,
+        isLoaded: false,
+        isLoading: false,
+        isStale: false,
+      }));
+    },
+  },
+
+  driveItem: {
+    cacheKey: (node) => `driveItem:${node.siteId}:${node.listId}:${node.resourceId}`,
+    fetchDetails: async (node, ctx) => {
+      const children = await ctx.graph.listDriveChildren(node.siteId!, node.listId!, node.resourceId === "root" ? undefined : node.resourceId);
+      return children;
+    },
+    fetchChildren: async (node, ctx) => {
+      const children = await ctx.graph.listDriveChildren(node.siteId!, node.listId!, node.resourceId === "root" ? undefined : node.resourceId);
+      // Only show folders as expandable children
+      return children
+        .filter((item: Record<string, unknown>) => item.folder)
+        .map((item: Record<string, unknown>) => ({
+          id: makeId(["driveItem", node.siteId!, node.listId!, item.id as string]),
+          parentId: node.id,
+          label: (item.name as string) || (item.id as string),
+          nodeType: "driveItem" as NodeType,
+          resourceId: item.id as string,
+          siteId: node.siteId,
+          listId: node.listId, // driveId carried forward
+          hasChildren: ((item.folder as Record<string, unknown>)?.childCount as number) > 0,
+          isLoaded: false,
+          isLoading: false,
+          isStale: false,
+        }));
+    },
   },
 
   hubSites: {

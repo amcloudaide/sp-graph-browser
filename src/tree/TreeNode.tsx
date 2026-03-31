@@ -10,6 +10,8 @@ import {
   Tag20Regular,
   Delete20Regular,
   Building20Regular,
+  Database20Regular,
+  Document20Regular,
 } from "@fluentui/react-icons";
 import type { NodeType } from "../types";
 import type { ReactElement } from "react";
@@ -34,6 +36,8 @@ const iconMap: Record<NodeType, ReactElement> = {
   termSet: <Folder20Regular />,
   term: <Tag20Regular />,
   hubSites: <Building20Regular />,
+  drives: <Database20Regular />,
+  driveItem: <Document20Regular />,
 };
 
 interface TreeNodeProps {

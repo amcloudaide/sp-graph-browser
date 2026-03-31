@@ -17,7 +17,9 @@ export type NodeType =
   | "termGroup"
   | "termSet"
   | "term"
-  | "hubSites";
+  | "hubSites"
+  | "drives"
+  | "driveItem";
 
 export interface TreeNodeData {
   id: string;
