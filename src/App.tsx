@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, useEffect } from "react";
 import { useMsal } from "@azure/msal-react";
 import type { PublicClientApplication } from "@azure/msal-browser";
 import { Button, Tooltip } from "@fluentui/react-components";
-import { SignOut20Regular, Person20Regular } from "@fluentui/react-icons";
+import { SignOut20Regular, Person20Regular, PanelLeft20Regular, PanelLeftContract20Regular } from "@fluentui/react-icons";
 import { useAuth } from "./auth/AuthProvider";
 import { SpRestClient } from "./data/spRestClient";
 import { LandingPage } from "./components/LandingPage";
@@ -36,6 +36,7 @@ export default function App() {
   const { instance } = useMsal();
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [viewMode, setViewMode] = useState<ViewMode>(settings.defaultViewMode);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const handleSettingsChange = useCallback((newSettings: AppSettings) => {
     setSettings(newSettings);
@@ -137,12 +138,35 @@ export default function App() {
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      <div style={{ width: 300, borderRight: "1px solid var(--colorNeutralStroke1)", overflow: "hidden" }}>
-        <TreePanel nodes={nodes} selectedNodeId={selectedNodeId} onExpand={expandNode} onSelect={selectNode} />
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+      {/* Sidebar */}
+      <div style={{
+        width: sidebarOpen ? 300 : 0,
+        minWidth: sidebarOpen ? 300 : 0,
+        flexShrink: 0,
+        borderRight: sidebarOpen ? "1px solid var(--colorNeutralStroke1)" : "none",
+        overflow: "hidden",
+        transition: "width 0.2s ease, min-width 0.2s ease",
+        display: "flex",
+        flexDirection: "column",
+      }}>
+        {sidebarOpen && (
+          <TreePanel nodes={nodes} selectedNodeId={selectedNodeId} onExpand={expandNode} onSelect={selectNode} />
+        )}
       </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", alignItems: "center" }}>
+
+      {/* Main content */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--colorNeutralStroke2)" }}>
+          <Tooltip content={sidebarOpen ? "Hide tree panel" : "Show tree panel"} relationship="label">
+            <Button
+              icon={sidebarOpen ? <PanelLeftContract20Regular /> : <PanelLeft20Regular />}
+              appearance="subtle"
+              size="small"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{ margin: "4px 4px 4px 8px" }}
+            />
+          </Tooltip>
           <div style={{ flex: 1 }}>
             <Toolbar
               breadcrumb={breadcrumb}
@@ -164,7 +188,6 @@ export default function App() {
                 appearance="subtle"
                 size="small"
                 onClick={() => {
-                  // Clear all cached auth state
                   localStorage.clear();
                   cacheStore.clear();
                   logout();
