@@ -67,13 +67,40 @@ export default function App() {
     refreshNode,
   } = useTreeData(graphClient, spRestClient, cacheStore, settings);
 
-  if (!isAuthenticated) {
-    return <LandingPage />;
-  }
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
 
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId);
+  // Navigate from table row click — find matching child node in the tree
+  const handleTableNavigate = useCallback((item: Record<string, unknown>) => {
+    const itemId = (item.id as string) ?? "";
+    if (!itemId) return;
 
-  const handleExport = (format: "json" | "csv" | "html") => {
+    // Look for a child node whose resourceId matches the clicked item's id
+    const childNode = nodes.find((n) =>
+      n.parentId === selectedNodeId && (n.resourceId === itemId || n.id.includes(itemId))
+    );
+    if (childNode) {
+      selectNode(childNode.id);
+      expandNode(childNode.id);
+    } else {
+      // Item might be a site at tenant level
+      const siteNode = nodes.find((n) => n.nodeType === "site" && n.resourceId === itemId);
+      if (siteNode) {
+        selectNode(siteNode.id);
+        expandNode(siteNode.id);
+      }
+    }
+  }, [selectedNodeId, nodes, selectNode, expandNode]);
+
+  // Determine if current data is navigable (array of items with ids that have matching tree nodes)
+  const isTableNavigable = useMemo(() => {
+    if (!selectedNodeData || !Array.isArray(selectedNodeData) || !selectedNode) return false;
+    const firstItem = selectedNodeData[0] as Record<string, unknown> | undefined;
+    if (!firstItem?.id) return false;
+    const navigableTypes = ["tenant", "lists", "subsites", "siteContentTypes", "contentTypes", "drives", "driveItem"];
+    return navigableTypes.includes(selectedNode.nodeType);
+  }, [selectedNodeData, selectedNode]);
+
+  const handleExport = useCallback((format: "json" | "csv" | "html") => {
     if (!selectedNodeData || !selectedNode) return;
     const name = selectedNode.label;
     switch (format) {
@@ -89,41 +116,11 @@ export default function App() {
         downloadHtmlReport(selectedNodeData, name, breadcrumb.map((n) => n.label));
         break;
     }
-  };
+  }, [selectedNodeData, selectedNode, breadcrumb]);
 
-  // Navigate from table row click — find matching child node in the tree
-  const handleTableNavigate = useCallback((item: Record<string, unknown>) => {
-    if (!selectedNode) return;
-    const itemId = (item.id as string) ?? "";
-    if (!itemId) return;
-
-    // Look for a child node whose resourceId or siteId matches the clicked item's id
-    const childNode = nodes.find((n) =>
-      n.parentId === selectedNode.id && (n.resourceId === itemId || n.id.includes(itemId))
-    );
-    if (childNode) {
-      selectNode(childNode.id);
-      expandNode(childNode.id);
-    } else {
-      // Item might be a site at tenant level
-      const siteNode = nodes.find((n) => n.nodeType === "site" && n.resourceId === itemId);
-      if (siteNode) {
-        selectNode(siteNode.id);
-        expandNode(siteNode.id);
-      }
-    }
-  }, [selectedNode, nodes, selectNode, expandNode]);
-
-  // Determine if current data is navigable (array of items with ids that have matching tree nodes)
-  const isTableNavigable = useMemo(() => {
-    if (!selectedNodeData || !Array.isArray(selectedNodeData) || !selectedNode) return false;
-    // Check if any item has an id that matches a child node
-    const firstItem = selectedNodeData[0] as Record<string, unknown> | undefined;
-    if (!firstItem?.id) return false;
-    // Navigable node types: tenant (sites), lists folder, subsites, content types, drives
-    const navigableTypes = ["tenant", "lists", "subsites", "siteContentTypes", "contentTypes", "drives", "driveItem"];
-    return navigableTypes.includes(selectedNode.nodeType);
-  }, [selectedNodeData, selectedNode]);
+  if (!isAuthenticated) {
+    return <LandingPage />;
+  }
 
   const renderView = () => {
     if (!selectedNodeData) {
