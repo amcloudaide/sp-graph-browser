@@ -314,10 +314,21 @@ const definitions: Record<NodeType, NodeDefinition> = {
   permissions: {
     cacheKey: (node) => `permissions:${node.siteId}`,
     fetchDetails: async (node, ctx) => {
-      // Graph permissions endpoint — returns app permissions and sharing info
-      // Note: SP REST roleassignments would give richer data (user/group roles)
-      // but CORS blocks it from browser SPAs hosted on different origins
-      return ctx.graph.listSitePermissions(node.siteId!);
+      // Graph /sites/{id}/permissions requires Sites.FullControl.All (too privileged).
+      // Instead, get the site details which include sharing capability and owner info,
+      // plus drive root permissions (sharing links) which work with Sites.Read.All.
+      const [site, sharingLinks] = await Promise.all([
+        ctx.graph.getSite(node.siteId!),
+        ctx.graph.listSharingLinks(node.siteId!).catch(() => []),
+      ]);
+      const s = site as Record<string, unknown>;
+      return {
+        owner: s.owner,
+        sharingCapability: s.sharingCapability,
+        externalSharingEnabled: s.sharingCapability !== "Disabled",
+        sharingLinksCount: (sharingLinks as unknown[]).length,
+        note: "Full role assignments (Owner/Member/Visitor groups) require Sites.FullControl.All or SP REST via proxy. Showing available sharing info.",
+      };
     },
     fetchChildren: async (node, _ctx) => {
       const siteId = node.siteId!;
