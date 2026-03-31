@@ -91,6 +91,40 @@ export default function App() {
     }
   };
 
+  // Navigate from table row click — find matching child node in the tree
+  const handleTableNavigate = useCallback((item: Record<string, unknown>) => {
+    if (!selectedNode) return;
+    const itemId = (item.id as string) ?? "";
+    if (!itemId) return;
+
+    // Look for a child node whose resourceId or siteId matches the clicked item's id
+    const childNode = nodes.find((n) =>
+      n.parentId === selectedNode.id && (n.resourceId === itemId || n.id.includes(itemId))
+    );
+    if (childNode) {
+      selectNode(childNode.id);
+      expandNode(childNode.id);
+    } else {
+      // Item might be a site at tenant level
+      const siteNode = nodes.find((n) => n.nodeType === "site" && n.resourceId === itemId);
+      if (siteNode) {
+        selectNode(siteNode.id);
+        expandNode(siteNode.id);
+      }
+    }
+  }, [selectedNode, nodes, selectNode, expandNode]);
+
+  // Determine if current data is navigable (array of items with ids that have matching tree nodes)
+  const isTableNavigable = useMemo(() => {
+    if (!selectedNodeData || !Array.isArray(selectedNodeData) || !selectedNode) return false;
+    // Check if any item has an id that matches a child node
+    const firstItem = selectedNodeData[0] as Record<string, unknown> | undefined;
+    if (!firstItem?.id) return false;
+    // Navigable node types: tenant (sites), lists folder, subsites, content types, drives
+    const navigableTypes = ["tenant", "lists", "subsites", "siteContentTypes", "contentTypes", "drives", "driveItem"];
+    return navigableTypes.includes(selectedNode.nodeType);
+  }, [selectedNodeData, selectedNode]);
+
   const renderView = () => {
     if (!selectedNodeData) {
       return <p style={{ color: "var(--colorNeutralForeground3)" }}>Select a node to view its properties</p>;
@@ -98,7 +132,7 @@ export default function App() {
     switch (viewMode) {
       case "properties": return <PropertiesView data={selectedNodeData} />;
       case "json": return <JsonView data={selectedNodeData} />;
-      case "table": return <TableView data={selectedNodeData} />;
+      case "table": return <TableView data={selectedNodeData} onNavigate={isTableNavigable ? handleTableNavigate : undefined} />;
     }
   };
 

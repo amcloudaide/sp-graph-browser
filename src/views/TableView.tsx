@@ -1,9 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { Input } from "@fluentui/react-components";
-import { ArrowUp20Regular, ArrowDown20Regular } from "@fluentui/react-icons";
+import { ArrowUp20Regular, ArrowDown20Regular, ChevronRight20Regular } from "@fluentui/react-icons";
 
 interface TableViewProps {
   data: unknown;
+  /** Called when user clicks a row to navigate deeper (e.g., click a list to open it) */
+  onNavigate?: (item: Record<string, unknown>) => void;
 }
 
 /** Format a cell value — handles nested objects, arrays, nulls */
@@ -14,7 +16,6 @@ function formatCell(value: unknown): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
     if (value.length === 0) return "[]";
-    // Show compact summary: display names or first string values
     return value.map((item) => {
       if (typeof item === "string") return item;
       if (typeof item === "object" && item !== null) {
@@ -26,10 +27,8 @@ function formatCell(value: unknown): string {
   }
   if (typeof value === "object") {
     const obj = value as Record<string, unknown>;
-    // Try to show the most useful field
     const label = obj.displayName ?? obj.name ?? obj.email ?? obj.value ?? obj.id;
     if (label !== undefined) return String(label);
-    // Flatten small objects
     const entries = Object.entries(obj).filter(([k]) => !k.startsWith("@odata"));
     if (entries.length <= 3) {
       return entries.map(([k, v]) => `${k}: ${formatCell(v)}`).join(", ");
@@ -39,10 +38,12 @@ function formatCell(value: unknown): string {
   return String(value);
 }
 
-export function TableView({ data }: TableViewProps) {
+export function TableView({ data, onNavigate }: TableViewProps) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
   const [filter, setFilter] = useState("");
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const resizingRef = useRef<{ col: string; startX: number; startWidth: number } | null>(null);
 
   const items = Array.isArray(data) ? data : typeof data === "object" && data ? [data] : [];
   if (items.length === 0) return <p>No tabular data available</p>;
@@ -73,8 +74,8 @@ export function TableView({ data }: TableViewProps) {
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
     return [...filtered].sort((a, b) => {
-      const va = String((a as Record<string, unknown>)[sortKey] ?? "");
-      const vb = String((b as Record<string, unknown>)[sortKey] ?? "");
+      const va = formatCell((a as Record<string, unknown>)[sortKey]);
+      const vb = formatCell((b as Record<string, unknown>)[sortKey]);
       return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
     });
   }, [filtered, sortKey, sortAsc]);
@@ -88,6 +89,32 @@ export function TableView({ data }: TableViewProps) {
     }
   };
 
+  // Column resize handlers
+  const onResizeStart = useCallback((col: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startWidth = columnWidths[col] || 150;
+    resizingRef.current = { col, startX: e.clientX, startWidth };
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const delta = ev.clientX - resizingRef.current.startX;
+      const newWidth = Math.max(60, resizingRef.current.startWidth + delta);
+      setColumnWidths((prev) => ({ ...prev, [resizingRef.current!.col]: newWidth }));
+    };
+
+    const onMouseUp = () => {
+      resizingRef.current = null;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }, [columnWidths]);
+
+  const isNavigable = !!onNavigate;
+
   return (
     <div>
       <Input
@@ -98,14 +125,15 @@ export function TableView({ data }: TableViewProps) {
       />
       <div style={{ overflow: "auto", maxHeight: "calc(100vh - 160px)" }}>
         <table style={{
-          width: "100%",
           borderCollapse: "collapse",
-          tableLayout: "fixed",
           fontSize: 12,
           fontFamily: "monospace",
         }}>
           <thead>
             <tr style={{ position: "sticky", top: 0, background: "var(--colorNeutralBackground3)", zIndex: 1 }}>
+              {isNavigable && (
+                <th style={{ width: 28, padding: "6px 4px", borderBottom: "1px solid var(--colorNeutralStroke1)" }} />
+              )}
               {columns.map((col) => (
                 <th
                   key={col}
@@ -119,20 +147,50 @@ export function TableView({ data }: TableViewProps) {
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
-                    minWidth: 80,
-                    maxWidth: 300,
+                    width: columnWidths[col] || 150,
+                    minWidth: 60,
+                    position: "relative",
                   }}
                   title={col}
                 >
                   {col}{" "}
                   {sortKey === col && (sortAsc ? <ArrowUp20Regular /> : <ArrowDown20Regular />)}
+                  {/* Resize handle */}
+                  <div
+                    onMouseDown={(e) => onResizeStart(col, e)}
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: 5,
+                      cursor: "col-resize",
+                      background: "transparent",
+                    }}
+                    onMouseOver={(e) => { (e.target as HTMLElement).style.background = "var(--colorBrandBackground)"; }}
+                    onMouseOut={(e) => { (e.target as HTMLElement).style.background = "transparent"; }}
+                  />
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {sorted.map((item, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid var(--colorNeutralStroke2)" }}>
+              <tr
+                key={i}
+                onClick={isNavigable ? () => onNavigate(item as Record<string, unknown>) : undefined}
+                style={{
+                  borderBottom: "1px solid var(--colorNeutralStroke2)",
+                  cursor: isNavigable ? "pointer" : undefined,
+                }}
+                onMouseOver={isNavigable ? (e) => { (e.currentTarget as HTMLElement).style.background = "var(--colorNeutralBackground1Hover)"; } : undefined}
+                onMouseOut={isNavigable ? (e) => { (e.currentTarget as HTMLElement).style.background = ""; } : undefined}
+              >
+                {isNavigable && (
+                  <td style={{ padding: "4px", color: "var(--colorNeutralForeground3)" }}>
+                    <ChevronRight20Regular />
+                  </td>
+                )}
                 {columns.map((col) => {
                   const formatted = formatCell((item as Record<string, unknown>)[col]);
                   return (
@@ -144,7 +202,8 @@ export function TableView({ data }: TableViewProps) {
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
-                        maxWidth: 300,
+                        width: columnWidths[col] || 150,
+                        maxWidth: columnWidths[col] || 150,
                       }}
                     >
                       {formatted}
@@ -158,6 +217,7 @@ export function TableView({ data }: TableViewProps) {
       </div>
       <p style={{ color: "var(--colorNeutralForeground3)", fontSize: 12, marginTop: 8 }}>
         {sorted.length} of {items.length} items
+        {isNavigable && " — click a row to navigate"}
       </p>
     </div>
   );
