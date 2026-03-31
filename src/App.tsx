@@ -74,21 +74,24 @@ export default function App() {
     const itemId = (item.id as string) ?? "";
     if (!itemId) return;
 
-    // Look for a child node whose resourceId matches the clicked item's id
-    const childNode = nodes.find((n) =>
-      n.parentId === selectedNodeId && (n.resourceId === itemId || n.id.includes(itemId))
-    );
-    if (childNode) {
-      selectNode(childNode.id);
-      expandNode(childNode.id);
-    } else {
-      // Item might be a site at tenant level
-      const siteNode = nodes.find((n) => n.nodeType === "site" && n.resourceId === itemId);
-      if (siteNode) {
-        selectNode(siteNode.id);
-        expandNode(siteNode.id);
+    // Defer state updates to avoid "Cannot update component while rendering" error
+    setTimeout(() => {
+      // Look for a child node whose resourceId matches the clicked item's id
+      const childNode = nodes.find((n) =>
+        n.parentId === selectedNodeId && (n.resourceId === itemId || n.id.includes(itemId))
+      );
+      if (childNode) {
+        selectNode(childNode.id);
+        expandNode(childNode.id);
+      } else {
+        // Item might be a site at tenant level
+        const siteNode = nodes.find((n) => n.nodeType === "site" && n.resourceId === itemId);
+        if (siteNode) {
+          selectNode(siteNode.id);
+          expandNode(siteNode.id);
+        }
       }
-    }
+    }, 0);
   }, [selectedNodeId, nodes, selectNode, expandNode]);
 
   // Determine if current data is navigable (array of items with ids that have matching tree nodes)

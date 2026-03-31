@@ -363,7 +363,13 @@ const definitions: Record<NodeType, NodeDefinition> = {
 
   sharingLinks: {
     cacheKey: (node) => `sharingLinks:${node.siteId}`,
-    fetchDetails: async (node, ctx) => ctx.graph.listSharingLinks(node.siteId!),
+    fetchDetails: async (node, ctx) => {
+      try {
+        return await ctx.graph.listSharingLinks(node.siteId!);
+      } catch {
+        return { note: "Sharing links require additional permissions (Sites.FullControl.All or drive access). Unable to retrieve." };
+      }
+    },
     fetchChildren: async () => [],
   },
 
