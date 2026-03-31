@@ -329,24 +329,12 @@ const definitions: Record<NodeType, NodeDefinition> = {
     fetchDetails: async (node, ctx) => {
       const site = await ctx.graph.getSite(node.siteId!);
       const s = site as Record<string, unknown>;
-      const result: Record<string, unknown> = {
+      return {
         owner: s.owner,
         sharingCapability: s.sharingCapability,
         externalSharingEnabled: s.sharingCapability !== "Disabled",
+        note: "Detailed role assignments (Owner/Member/Visitor) require Sites.FullControl.All which is too privileged for a read-only tool. Showing site sharing configuration.",
       };
-
-      if (ctx.enableFilesAccess) {
-        try {
-          const sharingLinks = await ctx.graph.listSharingLinks(node.siteId!);
-          result.sharingLinksCount = sharingLinks.length;
-        } catch {
-          result.sharingLinksNote = "Failed to retrieve sharing links — check Files.Read.All permission.";
-        }
-      } else {
-        result.sharingLinksNote = "Enable 'Files.Read.All' in Settings to view sharing links.";
-      }
-
-      return result;
     },
     fetchChildren: async (node, _ctx) => {
       const siteId = node.siteId!;
@@ -369,15 +357,12 @@ const definitions: Record<NodeType, NodeDefinition> = {
 
   sharingLinks: {
     cacheKey: (node) => `sharingLinks:${node.siteId}`,
-    fetchDetails: async (node, ctx) => {
-      if (!ctx.enableFilesAccess) {
-        return { note: "Enable 'Files.Read.All' in Settings to view sharing links." };
-      }
-      try {
-        return await ctx.graph.listSharingLinks(node.siteId!);
-      } catch {
-        return { note: "Failed to retrieve sharing links. Ensure Files.Read.All is granted and admin-consented on your app registration." };
-      }
+    fetchDetails: async (_node, _ctx) => {
+      // /drive/items/root/permissions only works with application permissions (Files.Read.All as app)
+      // not with delegated auth. This is a Graph API limitation for SPAs.
+      return {
+        note: "Sharing link enumeration requires application-only auth (Files.Read.All as application permission). This cannot be done from a browser SPA with delegated auth. Consider extending the proxy to support this endpoint.",
+      };
     },
     fetchChildren: async () => [],
   },
