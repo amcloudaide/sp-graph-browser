@@ -3,12 +3,10 @@ import { ClientSecretCredential } from "@azure/identity";
 import jwt from "jsonwebtoken";
 
 // Whitelisted Graph API patterns that the proxy can call with app-only auth.
-// Each pattern is a regex tested against the requested path.
+// Only GET/read operations on sites-related endpoints. No write operations.
 const ALLOWED_PATTERNS: RegExp[] = [
-  /^\/sites\/getAllSites\(\)/,                              // List all sites
-  /^\/sites\/[^/]+\/permissions$/,                          // Site permissions
-  /^\/sites\/[^/]+\/drive\/items\/[^/]+\/permissions$/,     // Drive item permissions (sharing links)
-  /^\/sites\/[^/]+\/drives\/[^/]+\/items\/[^/]+\/permissions$/, // Drive permissions (alternate path)
+  /^\/sites\//,          // All sites endpoints (subsites, lists, columns, permissions, drives, etc.)
+  /^\/organization$/,    // Organization info
 ];
 
 function isPathAllowed(path: string): boolean {

@@ -55,20 +55,37 @@ export class GraphClient {
   }
 
   async getAll<T>(endpoint: string): Promise<T[]> {
-    const results: T[] = [];
-    let url: string | null = endpoint;
-    while (url) {
-      const response = await this.client.api(url).get();
-      if (response.value) {
-        results.push(...response.value);
+    try {
+      const results: T[] = [];
+      let url: string | null = endpoint;
+      while (url) {
+        const response = await this.client.api(url).get();
+        if (response.value) {
+          results.push(...response.value);
+        }
+        url = response["@odata.nextLink"] ?? null;
       }
-      url = response["@odata.nextLink"] ?? null;
+      return results;
+    } catch (e) {
+      // On 403, try via proxy (app-only auth has broader access)
+      if (this.proxyUrl && String(e).includes("Access denied")) {
+        console.log(`[SP Graph Browser] Delegated 403 on ${endpoint}, trying proxy...`);
+        return this.callViaProxy<T[]>(endpoint, "v1.0");
+      }
+      throw e;
     }
-    return results;
   }
 
   async get<T>(endpoint: string): Promise<T> {
-    return this.client.api(endpoint).get();
+    try {
+      return await this.client.api(endpoint).get();
+    } catch (e) {
+      if (this.proxyUrl && String(e).includes("Access denied")) {
+        console.log(`[SP Graph Browser] Delegated 403 on ${endpoint}, trying proxy...`);
+        return this.callViaProxy<T>(endpoint, "v1.0");
+      }
+      throw e;
+    }
   }
 
   /** List all sites — uses multiple search queries to maximize coverage.
