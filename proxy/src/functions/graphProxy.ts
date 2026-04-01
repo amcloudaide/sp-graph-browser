@@ -122,7 +122,13 @@ async function callSpRest(
   const spHost = urlObj.hostname; // e.g., "myehn.sharepoint.com"
 
   const credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-  const tokenResponse = await credential.getToken(`https://${spHost}/.default`);
+  let tokenResponse;
+  try {
+    tokenResponse = await credential.getToken(`https://${spHost}/.default`);
+  } catch (tokenErr) {
+    context.error(`Failed to get SP token for ${spHost}: ${tokenErr}`);
+    throw new Error(`Failed to get SharePoint token for ${spHost}. Ensure the app registration has SharePoint API (Office 365 SharePoint Online) application permissions with admin consent. Error: ${tokenErr}`);
+  }
 
   const url = `${siteUrl}/_api/${apiPath}`;
   context.log(`SP REST proxy: ${url}`);
@@ -135,6 +141,7 @@ async function callSpRest(
   });
   if (!response.ok) {
     const errorText = await response.text();
+    context.error(`SP REST ${response.status} for ${url}: ${errorText}`);
     throw new Error(`SP REST ${response.status}: ${errorText}`);
   }
   const data = await response.json() as Record<string, unknown>;

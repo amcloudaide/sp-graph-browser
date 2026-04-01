@@ -347,7 +347,12 @@ const definitions: Record<NodeType, NodeDefinition> = {
           result.roleAssignments = roleAssignments;
           result.roleAssignmentsCount = Array.isArray(roleAssignments) ? roleAssignments.length : 0;
         } catch (e) {
-          result.roleAssignmentsNote = `SP REST permissions failed: ${e}. Ensure proxy has Sites.FullControl.All.`;
+          const errMsg = String(e);
+          if (errMsg.includes("SharePoint token") || errMsg.includes("SharePoint API")) {
+            result.roleAssignmentsNote = "Proxy cannot get SharePoint token. Add 'Sites.FullControl.All' APPLICATION permission from 'Office 365 SharePoint Online' API (not Microsoft Graph) and grant admin consent.";
+          } else {
+            result.roleAssignmentsNote = `SP REST failed: ${errMsg}`;
+          }
         }
       }
 
