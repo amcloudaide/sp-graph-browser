@@ -34,6 +34,26 @@ export class GraphClient {
     return response.accessToken;
   }
 
+  /** Call a SharePoint REST endpoint via the proxy (app-only auth). */
+  async callSpRestViaProxy<T>(siteUrl: string, apiPath: string): Promise<T> {
+    if (!this.proxyUrl) throw new Error("Proxy URL not configured");
+    const token = await this.getAccessToken();
+    const response = await fetch(`${this.proxyUrl}/api/graphProxy`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ spRest: { siteUrl, apiPath } }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(`Proxy SP REST ${response.status}: ${(err as Record<string, string>).error ?? response.statusText}`);
+    }
+    const result = await response.json() as { data: T };
+    return result.data;
+  }
+
   /** Call a Graph endpoint via the proxy (app-only auth). Returns the raw result. */
   async callViaProxy<T>(path: string, apiVersion = "beta"): Promise<T> {
     if (!this.proxyUrl) throw new Error("Proxy URL not configured");

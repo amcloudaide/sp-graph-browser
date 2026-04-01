@@ -108,6 +108,39 @@ async function callGraph(
   return { data: allResults, isCollection: true };
 }
 
+async function callSpRest(
+  siteUrl: string,
+  apiPath: string,
+  context: InvocationContext
+): Promise<unknown> {
+  const clientId = process.env.GRAPH_CLIENT_ID!;
+  const clientSecret = process.env.GRAPH_CLIENT_SECRET!;
+  const tenantId = process.env.GRAPH_TENANT_ID!;
+
+  // Extract tenant name from site URL (e.g., "myehn" from "https://myehn.sharepoint.com/...")
+  const urlObj = new URL(siteUrl);
+  const spHost = urlObj.hostname; // e.g., "myehn.sharepoint.com"
+
+  const credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+  const tokenResponse = await credential.getToken(`https://${spHost}/.default`);
+
+  const url = `${siteUrl}/_api/${apiPath}`;
+  context.log(`SP REST proxy: ${url}`);
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${tokenResponse.token}`,
+      Accept: "application/json;odata=nometadata",
+    },
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`SP REST ${response.status}: ${errorText}`);
+  }
+  const data = await response.json() as Record<string, unknown>;
+  return data.value ?? data;
+}
+
 function getCorsHeaders(req: HttpRequest): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
   const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "").split(",").map((o) => o.trim());
@@ -140,13 +173,43 @@ async function handler(req: HttpRequest, context: InvocationContext): Promise<Ht
   }
 
   // Parse request body
-  let body: { path?: string; apiVersion?: string };
+  let body: { path?: string; apiVersion?: string; spRest?: { siteUrl: string; apiPath: string } };
   try {
-    body = await req.json() as { path?: string; apiVersion?: string };
+    body = await req.json() as { path?: string; apiVersion?: string; spRest?: { siteUrl: string; apiPath: string } };
   } catch {
-    return { status: 400, headers: corsHeaders, jsonBody: { error: "Invalid JSON body. Expected: { path: '/sites/...' }" } };
+    return { status: 400, headers: corsHeaders, jsonBody: { error: "Invalid JSON body" } };
   }
 
+  // SP REST mode — call SharePoint REST API via app-only token
+  if (body.spRest) {
+    const { siteUrl, apiPath } = body.spRest;
+    if (!siteUrl || !apiPath) {
+      return { status: 400, headers: corsHeaders, jsonBody: { error: "Missing siteUrl or apiPath in spRest" } };
+    }
+    // Security: only allow read operations on known SP REST paths
+    const allowedSpPaths = [
+      /^web\/roleassignments/,
+      /^web\/sitegroups/,
+      /^web\/recyclebin/,
+      /^web\/siteusers/,
+    ];
+    if (!allowedSpPaths.some((p) => p.test(apiPath))) {
+      return { status: 403, headers: corsHeaders, jsonBody: { error: `SP REST path not allowed: ${apiPath}` } };
+    }
+    try {
+      const result = await callSpRest(siteUrl, apiPath, context);
+      return {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        jsonBody: { data: result, isCollection: Array.isArray(result) },
+      };
+    } catch (err) {
+      context.error(`SP REST error: ${err}`);
+      return { status: 502, headers: corsHeaders, jsonBody: { error: "SP REST call failed", details: String(err) } };
+    }
+  }
+
+  // Graph API mode
   const graphPath = body.path;
   const apiVersion = body.apiVersion ?? "beta";
 

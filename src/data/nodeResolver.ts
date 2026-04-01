@@ -329,19 +329,26 @@ const definitions: Record<NodeType, NodeDefinition> = {
     fetchDetails: async (node, ctx) => {
       const site = await ctx.graph.getSite(node.siteId!);
       const s = site as Record<string, unknown>;
+      const siteUrl = s.webUrl as string;
+
       const result: Record<string, unknown> = {
         owner: s.owner,
         sharingCapability: s.sharingCapability,
         externalSharingEnabled: s.sharingCapability !== "Disabled",
       };
 
-      // Try proxy for detailed permissions (needs Sites.FullControl.All app permission)
-      try {
-        const perms = await ctx.graph.callViaProxy<unknown[]>(`/sites/${node.siteId}/permissions`, "v1.0");
-        result.appPermissions = perms;
-        result.appPermissionsCount = Array.isArray(perms) ? perms.length : 0;
-      } catch {
-        result.appPermissionsNote = "Configure proxy with Sites.FullControl.All to view app permissions.";
+      // Try SP REST via proxy for real role assignments (groups, members, roles)
+      if (siteUrl) {
+        try {
+          const roleAssignments = await ctx.graph.callSpRestViaProxy<unknown[]>(
+            siteUrl,
+            "web/roleassignments?$expand=Member,RoleDefinitionBindings"
+          );
+          result.roleAssignments = roleAssignments;
+          result.roleAssignmentsCount = Array.isArray(roleAssignments) ? roleAssignments.length : 0;
+        } catch (e) {
+          result.roleAssignmentsNote = `SP REST permissions failed: ${e}. Ensure proxy has Sites.FullControl.All.`;
+        }
       }
 
       return result;
@@ -411,12 +418,17 @@ const definitions: Record<NodeType, NodeDefinition> = {
   recycleBin: {
     cacheKey: (node) => `recycleBin:${node.siteId}`,
     fetchDetails: async (node, ctx) => {
-      if (!ctx.spRest) return [];
-      // Need site URL — extract from site details in cache
+      // Try SP REST via proxy (avoids CORS issues)
       const siteEntry = await ctx.cache.get(`site:${node.siteId}`);
       const siteUrl = (siteEntry?.data as Record<string, unknown>)?.webUrl as string;
-      if (!siteUrl) return [];
-      return ctx.spRest.listRecycleBin(siteUrl);
+      if (siteUrl) {
+        try {
+          return await ctx.graph.callSpRestViaProxy<unknown[]>(siteUrl, "web/recyclebin?$top=200");
+        } catch (e) {
+          console.warn("[SP Graph Browser] Recycle bin via proxy failed:", e);
+        }
+      }
+      return { note: "Recycle bin requires the proxy. Set Proxy URL in Settings." };
     },
     fetchChildren: async () => [],
   },
