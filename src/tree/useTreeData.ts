@@ -41,9 +41,6 @@ export function useTreeData(
     async (nodeId: string) => {
       if (!graph) return;
 
-      // Defer to avoid React error #300 when expand + select fire together
-      await new Promise((r) => setTimeout(r, 0));
-
       const node = nodesRef.current.find((n) => n.id === nodeId);
       if (!node || !node.hasChildren || node.isLoading) return;
 
@@ -86,10 +83,6 @@ export function useTreeData(
   const selectNode = useCallback(
     async (nodeId: string) => {
       if (!graph) return;
-
-      // Defer state updates to avoid React error #300
-      // (cannot update component while rendering another)
-      await new Promise((r) => setTimeout(r, 0));
 
       setSelectedNodeId(nodeId);
       const node = nodesRef.current.find((n) => n.id === nodeId);

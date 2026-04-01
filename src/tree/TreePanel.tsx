@@ -76,7 +76,9 @@ export function TreePanel({ nodes, selectedNodeId, onExpand, onSelect }: TreePan
     onOpenChange: (_event, data) => {
       const nodeId = data.value as string;
       if (data.open) {
-        onExpand(nodeId);
+        // Defer expand to next microtask to avoid React error #300
+        // (Fluent UI's tree is still processing the event when expand triggers state updates)
+        setTimeout(() => onExpand(nodeId), 0);
       }
     },
   });
@@ -130,7 +132,7 @@ export function TreePanel({ nodes, selectedNodeId, onExpand, onSelect }: TreePan
                 aria-posinset={ariaPosinset as number}
                 itemType={itemType}
                 parentValue={parentValue}
-                onClick={() => onSelect(node.id)}
+                onClick={() => setTimeout(() => onSelect(node.id), 0)}
                 style={{
                   backgroundColor: selectedNodeId === node.id ? "var(--colorNeutralBackground1Selected)" : undefined,
                 }}
