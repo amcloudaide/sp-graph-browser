@@ -251,6 +251,27 @@ export class GraphClient {
     return this.getAll<Record<string, unknown>>(`/sites/${siteId}/contentTypes/${contentTypeId}/columns`);
   }
 
+  /** Get the M365 group associated with a site (if any) */
+  async getSiteGroup(siteId: string): Promise<Record<string, unknown> | null> {
+    try {
+      // Sites connected to M365 groups have a group field
+      const site = await this.get<Record<string, unknown>>(`/sites/${siteId}?$select=id,displayName,webUrl,group`);
+      const groupId = (site.group as Record<string, unknown>)?.id as string;
+      if (groupId) return this.get(`/groups/${groupId}`);
+    } catch { /* not group-connected */ }
+    return null;
+  }
+
+  /** Get members of a group */
+  async listGroupMembers(groupId: string) {
+    return this.getAll<Record<string, unknown>>(`/groups/${groupId}/members?$select=id,displayName,mail,userPrincipalName`);
+  }
+
+  /** Get owners of a group */
+  async listGroupOwners(groupId: string) {
+    return this.getAll<Record<string, unknown>>(`/groups/${groupId}/owners?$select=id,displayName,mail,userPrincipalName`);
+  }
+
   async listTermStoreGroups(siteId: string) {
     const response = await this.client.api(`/sites/${siteId}/termStore/groups`).version("beta").get();
     return response.value ?? [];

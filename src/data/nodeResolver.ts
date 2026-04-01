@@ -329,31 +329,54 @@ const definitions: Record<NodeType, NodeDefinition> = {
     fetchDetails: async (node, ctx) => {
       const site = await ctx.graph.getSite(node.siteId!);
       const s = site as Record<string, unknown>;
-      const siteUrl = s.webUrl as string;
 
       const result: Record<string, unknown> = {
+        siteUrl: s.webUrl,
         owner: s.owner,
         sharingCapability: s.sharingCapability,
         externalSharingEnabled: s.sharingCapability !== "Disabled",
       };
 
-      // Try SP REST via proxy for real role assignments (groups, members, roles)
-      if (siteUrl) {
+      // Try to get M365 group info (for Teams/group-connected sites)
+      try {
+        // Find group ID via site's drive owner
         try {
-          const roleAssignments = await ctx.graph.callSpRestViaProxy<unknown[]>(
-            siteUrl,
-            "web/roleassignments?$expand=Member,RoleDefinitionBindings"
-          );
-          result.roleAssignments = roleAssignments;
-          result.roleAssignmentsCount = Array.isArray(roleAssignments) ? roleAssignments.length : 0;
-        } catch (e) {
-          const errMsg = String(e);
-          if (errMsg.includes("SharePoint token") || errMsg.includes("SharePoint API")) {
-            result.roleAssignmentsNote = "Proxy cannot get SharePoint token. Add 'Sites.FullControl.All' APPLICATION permission from 'Office 365 SharePoint Online' API (not Microsoft Graph) and grant admin consent.";
-          } else {
-            result.roleAssignmentsNote = `SP REST failed: ${errMsg}`;
+          const drives = await ctx.graph.getAll<Record<string, unknown>>(`/sites/${node.siteId}/drives?$select=id,name,owner`);
+          for (const drive of drives) {
+            const driveOwner = drive.owner as Record<string, unknown> | undefined;
+            const group = driveOwner?.group as Record<string, unknown> | undefined;
+            if (group?.id) {
+              const groupId = group.id as string;
+              result.m365GroupId = groupId;
+              result.m365GroupName = group.displayName;
+
+              const [owners, members] = await Promise.all([
+                ctx.graph.listGroupOwners(groupId).catch(() => []),
+                ctx.graph.listGroupMembers(groupId).catch(() => []),
+              ]);
+
+              result.owners = owners.map((u: Record<string, unknown>) => ({
+                displayName: u.displayName,
+                email: u.mail ?? u.userPrincipalName,
+              }));
+              result.ownersCount = owners.length;
+              result.members = members.map((u: Record<string, unknown>) => ({
+                displayName: u.displayName,
+                email: u.mail ?? u.userPrincipalName,
+              }));
+              result.membersCount = members.length;
+              break;
+            }
           }
+        } catch {
+          // Not a group-connected site — that's fine
         }
+      } catch {
+        // Fall through — show what we have
+      }
+
+      if (!result.owners && !result.members) {
+        result.note = "This site is not connected to a Microsoft 365 Group. Owner/member details are only available for Teams/Group-connected sites via Graph API.";
       }
 
       return result;
