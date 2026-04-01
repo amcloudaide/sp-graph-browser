@@ -47,8 +47,10 @@ export class GraphClient {
       body: JSON.stringify({ spRest: { siteUrl, apiPath } }),
     });
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(`Proxy SP REST ${response.status}: ${(err as Record<string, string>).error ?? response.statusText}`);
+      const err = await response.json().catch(() => ({})) as Record<string, string>;
+      const detail = err.details ?? err.error ?? response.statusText;
+      console.error(`[SP Graph Browser] SP REST proxy error for ${siteUrl}/_api/${apiPath}:`, detail);
+      throw new Error(detail);
     }
     const result = await response.json() as { data: T };
     return result.data;
