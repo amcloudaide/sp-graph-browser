@@ -81,12 +81,12 @@ export class BlobClient {
     // Fetch analytics files in parallel
     const [sitesInventory, permissionsReport, oversharingAnalysis, oversharingSummary, externalUsersReport, sharingReport] =
       await Promise.all([
-        fetchBlobJson<Record<string, unknown>[]>(baseUrl, "sharepoint/analytics/latest/sites-inventory.json", sasToken).catch(() => []),
-        fetchBlobJson<Record<string, unknown>[]>(baseUrl, "sharepoint/analytics/latest/permissions-report.json", sasToken).catch(() => []),
-        fetchBlobJson<Record<string, unknown>[]>(baseUrl, "sharepoint/analytics/latest/oversharing-analysis.json", sasToken).catch(() => []),
-        fetchBlobJson<Record<string, unknown>>(baseUrl, "sharepoint/analytics/latest/oversharing-summary.json", sasToken).catch(() => ({})),
-        fetchBlobJson<Record<string, unknown>[]>(baseUrl, "sharepoint/analytics/latest/external-users-report.json", sasToken).catch(() => []),
-        fetchBlobJson<Record<string, unknown>[]>(baseUrl, "sharepoint/analytics/latest/sharing-report.json", sasToken).catch(() => []),
+        fetchBlobJson<Record<string, unknown>[]>(baseUrl, "sharepoint/analytics/sites-inventory.json", sasToken).catch(() => []),
+        fetchBlobJson<Record<string, unknown>[]>(baseUrl, "sharepoint/analytics/permissions-report.json", sasToken).catch(() => []),
+        fetchBlobJson<Record<string, unknown>[]>(baseUrl, "sharepoint/analytics/oversharing-analysis.json", sasToken).catch(() => []),
+        fetchBlobJson<Record<string, unknown>>(baseUrl, "sharepoint/analytics/oversharing-summary.json", sasToken).catch(() => ({})),
+        fetchBlobJson<Record<string, unknown>[]>(baseUrl, "sharepoint/analytics/external-users-report.json", sasToken).catch(() => []),
+        fetchBlobJson<Record<string, unknown>[]>(baseUrl, "sharepoint/analytics/sharing-report.json", sasToken).catch(() => []),
       ]);
 
     const tenantName = extractTenantName(sitesInventory);
