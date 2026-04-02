@@ -115,6 +115,18 @@ export function SettingsDialog({ settings, onSave }: SettingsDialogProps) {
                 placeholder="https://your-function.azurewebsites.net"
               />
             </div>
+            <div>
+              <Label htmlFor="blobSasUrl">Blob Storage SAS URL (optional)</Label>
+              <Input
+                id="blobSasUrl"
+                value={draft.blobSasUrl ?? ""}
+                onChange={(_, data) => setDraft({ ...draft, blobSasUrl: data.value || null })}
+                placeholder="https://storageaccount.blob.core.windows.net/container?sv=..."
+              />
+              <Body1 style={{ fontSize: 11, color: "var(--colorNeutralForeground3)", marginTop: 4 }}>
+                SAS URL for your m365reports blob container. Enables Analytics mode with full permissions data.
+              </Body1>
+            </div>
             <div style={{ borderTop: "1px solid var(--colorNeutralStroke2)", paddingTop: 12 }}>
               <Label style={{ fontWeight: 600, marginBottom: 8, display: "block" }}>Additional Permissions</Label>
               <Checkbox
