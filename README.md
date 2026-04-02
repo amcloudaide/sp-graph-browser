@@ -90,6 +90,43 @@ https://<app-name>.azurewebsites.net
 Set `ALLOWED_TENANT_IDS` (comma-separated) to restrict which tenants may call
 the proxy. When unset, any authenticated tenant can use it.
 
+## Analytics Mode
+
+Browse pre-collected M365DSC export and SharePoint analytics data from Azure Blob Storage -- no live Graph API connection required.
+
+### What it does
+
+Loads data from blob storage and presents it in the same tree browser interface:
+
+- **M365DSC data**: full SharePoint configuration export (`Sharepoint-Report.json`, 36K+ components) with sites, lists, content types, columns, permissions, and more
+- **Analytics pipeline data**: permissions matrix, oversharing report, external/guest users, sharing links, and sites inventory
+
+### Prerequisites
+
+- Azure Blob Storage container with M365DSC and/or analytics JSON files
+- A SAS URL for the container (read + list permissions)
+- CORS enabled on the storage account for the SPA origin
+
+### CORS setup
+
+Azure Portal > Storage Account > **Resource sharing (CORS)** > Blob service > Add rule:
+
+| Field | Value |
+|-------|-------|
+| Allowed origins | `https://amcloudaide.github.io` (or `http://localhost:5173` for dev) |
+| Allowed methods | `GET` |
+| Allowed headers | `*` |
+| Max age | `3600` |
+
+### How to enable
+
+1. Click the **Settings** gear icon
+2. Paste your **Blob Storage SAS URL** (e.g. `https://<account>.blob.core.windows.net/<container>?<sas-token>`)
+3. Click **Save**
+4. Click the **Analytics** toggle in the toolbar to switch from live Graph mode to blob mode
+
+The tree rebuilds automatically when toggling between Live and Analytics modes.
+
 ## License
 
 MIT
