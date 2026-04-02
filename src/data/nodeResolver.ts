@@ -25,7 +25,7 @@ function makeId(parts: string[]): string {
   return parts.join(":");
 }
 
-const definitions: Record<NodeType, NodeDefinition> = {
+const definitions: Partial<Record<NodeType, NodeDefinition>> = {
   tenant: {
     cacheKey: () => "tenant",
     fetchDetails: async (_node, ctx) => {
@@ -586,6 +586,6 @@ const definitions: Record<NodeType, NodeDefinition> = {
   },
 };
 
-export function getNodeDefinition(nodeType: NodeType): NodeDefinition {
+export function getNodeDefinition(nodeType: NodeType): NodeDefinition | undefined {
   return definitions[nodeType];
 }

@@ -45,6 +45,7 @@ export function useTreeData(
       if (!node || !node.hasChildren || node.isLoading) return;
 
       const definition = getNodeDefinition(node.nodeType);
+      if (!definition) return;
       const cacheKey = definition.cacheKey(node) + ":children";
 
       // Check cache first
@@ -89,6 +90,7 @@ export function useTreeData(
       if (!node) return;
 
       const definition = getNodeDefinition(node.nodeType);
+      if (!definition) return;
       const cacheKey = definition.cacheKey(node);
 
       // Check cache
@@ -118,6 +120,7 @@ export function useTreeData(
       if (!node) return;
 
       const definition = getNodeDefinition(node.nodeType);
+      if (!definition) return;
       await cache.invalidate(definition.cacheKey(node));
       await cache.invalidate(definition.cacheKey(node) + ":children");
 

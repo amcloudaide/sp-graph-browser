@@ -16,7 +16,7 @@ import {
 import type { NodeType } from "../types";
 import type { ReactElement } from "react";
 
-const iconMap: Record<NodeType, ReactElement> = {
+const iconMap: Partial<Record<NodeType, ReactElement>> = {
   tenant: <Globe20Regular />,
   site: <Building20Regular />,
   subsites: <Folder20Regular />,
