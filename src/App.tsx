@@ -15,11 +15,13 @@ import { CacheStore } from "./data/cacheStore";
 import { PropertiesView } from "./views/PropertiesView";
 import { JsonView } from "./views/JsonView";
 import { TableView } from "./views/TableView";
+import { BlobClient } from "./data/blobClient";
+import { buildAnalyticsTree } from "./data/analyticsTreeBuilder";
 import { downloadJson } from "./export/jsonExporter";
 import { downloadCsv } from "./export/csvExporter";
 import { downloadHtmlReport } from "./export/htmlReportBuilder";
 import { DEFAULT_SETTINGS } from "./types";
-import type { ViewMode, AppSettings } from "./types";
+import type { ViewMode, AppSettings, AppMode, BlobData } from "./types";
 
 function loadSettings(): AppSettings {
   try {
@@ -37,6 +39,12 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [viewMode, setViewMode] = useState<ViewMode>(settings.defaultViewMode);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [appMode, setAppMode] = useState<AppMode>("live");
+  const [blobData, setBlobData] = useState<BlobData | null>(null);
+  const [blobLoading, setBlobLoading] = useState(false);
+  const [blobError, setBlobError] = useState<string | null>(null);
+
+  const blobClient = useMemo(() => new BlobClient(cacheStore), []);
 
   const handleSettingsChange = useCallback((newSettings: AppSettings) => {
     setSettings(newSettings);
@@ -68,7 +76,50 @@ export default function App() {
     refreshNode,
   } = useTreeData(graphClient, spRestClient, cacheStore, settings);
 
+  // Load blob data when analytics mode is active
+  useEffect(() => {
+    if (appMode !== "analytics" || !settings.blobSasUrl) return;
+    if (blobData) return; // Already loaded
+
+    setBlobLoading(true);
+    setBlobError(null);
+    blobClient.loadAll(settings.blobSasUrl, (msg) => console.log(`[Blob] ${msg}`))
+      .then((data) => {
+        setBlobData(data);
+        setBlobLoading(false);
+      })
+      .catch((err) => {
+        console.error("[SP Graph Browser] Blob load failed:", err);
+        setBlobError(String(err));
+        setBlobLoading(false);
+      });
+  }, [appMode, settings.blobSasUrl, blobData, blobClient]);
+
+  // Build analytics tree from blob data
+  const analyticsTree = useMemo(() => {
+    if (!blobData) return null;
+    return buildAnalyticsTree(blobData);
+  }, [blobData]);
+
+  // Active nodes and data depend on mode
+  const activeNodes = appMode === "analytics" && analyticsTree ? analyticsTree.nodes : nodes;
+  const activeSelectedData = appMode === "analytics" && analyticsTree && selectedNodeId
+    ? analyticsTree.nodeData.get(selectedNodeId) ?? selectedNodeData
+    : selectedNodeData;
+
+  // Blob data age for the toolbar badge
+  const blobDataAge = blobData
+    ? `${Math.round((Date.now() - blobData.loadedAt) / 3600000)}h ago`
+    : null;
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
+
+  const handleAppModeChange = useCallback((mode: AppMode) => {
+    setAppMode(mode);
+    if (mode === "analytics" && !settings.blobSasUrl) {
+      setBlobError("Configure Blob SAS URL in Settings to use Analytics mode.");
+    }
+  }, [settings.blobSasUrl]);
 
   // Navigate from table row click — find matching child node in the tree
   const handleTableNavigate = useCallback((item: Record<string, unknown>) => {
@@ -127,13 +178,20 @@ export default function App() {
   }
 
   const renderView = () => {
-    if (!selectedNodeData) {
+    if (appMode === "analytics" && blobLoading) {
+      return <p style={{ color: "var(--colorNeutralForeground3)" }}>Loading analytics data...</p>;
+    }
+    if (appMode === "analytics" && blobError) {
+      return <p style={{ color: "var(--colorPaletteRedForeground1)" }}>{blobError}</p>;
+    }
+    const viewData = activeSelectedData;
+    if (!viewData) {
       return <p style={{ color: "var(--colorNeutralForeground3)" }}>Select a node to view its properties</p>;
     }
     switch (viewMode) {
-      case "properties": return <PropertiesView data={selectedNodeData} />;
-      case "json": return <JsonView data={selectedNodeData} />;
-      case "table": return <TableView data={selectedNodeData} onNavigate={isTableNavigable ? handleTableNavigate : undefined} />;
+      case "properties": return <PropertiesView data={viewData} />;
+      case "json": return <JsonView data={viewData} />;
+      case "table": return <TableView data={viewData} onNavigate={isTableNavigable ? handleTableNavigate : undefined} />;
     }
   };
 
@@ -151,7 +209,7 @@ export default function App() {
         flexDirection: "column",
       }}>
         {sidebarOpen && (
-          <TreePanel nodes={nodes} selectedNodeId={selectedNodeId} onExpand={expandNode} onSelect={selectNode} />
+          <TreePanel nodes={activeNodes} selectedNodeId={selectedNodeId} onExpand={expandNode} onSelect={selectNode} />
         )}
       </div>
 
@@ -171,10 +229,20 @@ export default function App() {
             <Toolbar
               breadcrumb={breadcrumb}
               viewMode={viewMode}
+              appMode={appMode}
               onViewModeChange={setViewMode}
-              onRefresh={() => selectedNodeId && refreshNode(selectedNodeId)}
+              onAppModeChange={handleAppModeChange}
+              onRefresh={() => {
+                if (appMode === "analytics") {
+                  blobClient.clearCache();
+                  setBlobData(null);
+                } else if (selectedNodeId) {
+                  refreshNode(selectedNodeId);
+                }
+              }}
               onExport={handleExport}
               onBreadcrumbClick={selectNode}
+              blobDataAge={blobDataAge}
             />
           </div>
           <div style={{ padding: "4px 8px", display: "flex", alignItems: "center", gap: 4 }}>
