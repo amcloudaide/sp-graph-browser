@@ -67,14 +67,17 @@ export default function App() {
   }, [isAuthenticated, account, tenantName, instance]);
 
   const {
-    nodes,
-    selectedNodeId,
-    selectedNodeData,
-    breadcrumb,
-    expandNode,
-    selectNode,
+    nodes: liveNodes,
+    selectedNodeId: liveSelectedNodeId,
+    selectedNodeData: liveSelectedNodeData,
+    breadcrumb: liveBreadcrumb,
+    expandNode: liveExpandNode,
+    selectNode: liveSelectNode,
     refreshNode,
   } = useTreeData(graphClient, spRestClient, cacheStore, settings);
+
+  // Analytics mode — local selection state (no Graph calls)
+  const [analyticsSelectedNodeId, setAnalyticsSelectedNodeId] = useState<string | null>(null);
 
   // Load blob data when analytics mode is active
   useEffect(() => {
@@ -101,18 +104,50 @@ export default function App() {
     return buildAnalyticsTree(blobData);
   }, [blobData]);
 
-  // Active nodes and data depend on mode
-  const activeNodes = appMode === "analytics" && analyticsTree ? analyticsTree.nodes : nodes;
-  const activeSelectedData = appMode === "analytics" && analyticsTree && selectedNodeId
-    ? analyticsTree.nodeData.get(selectedNodeId) ?? selectedNodeData
-    : selectedNodeData;
+  const isAnalytics = appMode === "analytics";
+
+  // Active nodes, selection, and data depend on mode
+  const activeNodes = isAnalytics && analyticsTree ? analyticsTree.nodes : liveNodes;
+  const selectedNodeId = isAnalytics ? analyticsSelectedNodeId : liveSelectedNodeId;
+  const activeSelectedData = isAnalytics && analyticsTree && analyticsSelectedNodeId
+    ? analyticsTree.nodeData.get(analyticsSelectedNodeId) ?? null
+    : liveSelectedNodeData;
+
+  // Breadcrumb: in analytics mode, walk parent chain from selected node
+  const breadcrumb = useMemo(() => {
+    if (!selectedNodeId) return [];
+    if (!isAnalytics) return liveBreadcrumb;
+    const path: typeof activeNodes = [];
+    let current = activeNodes.find((n) => n.id === selectedNodeId);
+    while (current) {
+      path.unshift(current);
+      current = current.parentId ? activeNodes.find((n) => n.id === current!.parentId) : undefined;
+    }
+    return path;
+  }, [selectedNodeId, isAnalytics, liveBreadcrumb, activeNodes]);
+
+  // Mode-aware select and expand
+  const selectNode = useCallback((nodeId: string) => {
+    if (isAnalytics) {
+      setTimeout(() => setAnalyticsSelectedNodeId(nodeId), 0);
+    } else {
+      liveSelectNode(nodeId);
+    }
+  }, [isAnalytics, liveSelectNode]);
+
+  const expandNode = useCallback((nodeId: string) => {
+    if (!isAnalytics) {
+      liveExpandNode(nodeId);
+    }
+    // Analytics tree is pre-built — no expand needed, tree already has all nodes
+  }, [isAnalytics, liveExpandNode]);
 
   // Blob data age for the toolbar badge
   const blobDataAge = blobData
     ? `${Math.round((Date.now() - blobData.loadedAt) / 3600000)}h ago`
     : null;
 
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
+  const selectedNode = activeNodes.find((n) => n.id === selectedNodeId) ?? null;
 
   const handleAppModeChange = useCallback((mode: AppMode) => {
     setAppMode(mode);
@@ -126,52 +161,54 @@ export default function App() {
     const itemId = (item.id as string) ?? "";
     if (!itemId) return;
 
-    // Defer state updates to avoid "Cannot update component while rendering" error
     setTimeout(() => {
-      // Look for a child node whose resourceId matches the clicked item's id
-      const childNode = nodes.find((n) =>
+      const childNode = activeNodes.find((n) =>
         n.parentId === selectedNodeId && (n.resourceId === itemId || n.id.includes(itemId))
       );
       if (childNode) {
         selectNode(childNode.id);
         expandNode(childNode.id);
       } else {
-        // Item might be a site at tenant level
-        const siteNode = nodes.find((n) => n.nodeType === "site" && n.resourceId === itemId);
+        const siteNode = activeNodes.find((n) =>
+          (n.nodeType === "site" || n.nodeType === "analyticsSite") && n.resourceId === itemId
+        );
         if (siteNode) {
           selectNode(siteNode.id);
           expandNode(siteNode.id);
         }
       }
     }, 0);
-  }, [selectedNodeId, nodes, selectNode, expandNode]);
+  }, [selectedNodeId, activeNodes, selectNode, expandNode]);
 
   // Determine if current data is navigable (array of items with ids that have matching tree nodes)
   const isTableNavigable = useMemo(() => {
-    if (!selectedNodeData || !Array.isArray(selectedNodeData) || !selectedNode) return false;
-    const firstItem = selectedNodeData[0] as Record<string, unknown> | undefined;
+    if (!activeSelectedData || !Array.isArray(activeSelectedData) || !selectedNode) return false;
+    const firstItem = activeSelectedData[0] as Record<string, unknown> | undefined;
     if (!firstItem?.id) return false;
-    const navigableTypes = ["tenant", "lists", "subsites", "siteContentTypes", "contentTypes", "drives", "driveItem"];
+    const navigableTypes = [
+      "tenant", "lists", "subsites", "siteContentTypes", "contentTypes", "drives", "driveItem",
+      "analyticsAllSites", "analyticsOwnerGroup", "analyticsRiskLevel", "analyticsRiskType",
+    ];
     return navigableTypes.includes(selectedNode.nodeType);
-  }, [selectedNodeData, selectedNode]);
+  }, [activeSelectedData, selectedNode]);
 
   const handleExport = useCallback((format: "json" | "csv" | "html") => {
-    if (!selectedNodeData || !selectedNode) return;
+    if (!activeSelectedData || !selectedNode) return;
     const name = selectedNode.label;
     switch (format) {
       case "json":
-        downloadJson(selectedNodeData, name);
+        downloadJson(activeSelectedData, name);
         break;
       case "csv":
-        if (Array.isArray(selectedNodeData)) {
-          downloadCsv(selectedNodeData as Record<string, unknown>[], name);
+        if (Array.isArray(activeSelectedData)) {
+          downloadCsv(activeSelectedData as Record<string, unknown>[], name);
         }
         break;
       case "html":
-        downloadHtmlReport(selectedNodeData, name, breadcrumb.map((n) => n.label));
+        downloadHtmlReport(activeSelectedData, name, breadcrumb.map((n) => n.label));
         break;
     }
-  }, [selectedNodeData, selectedNode, breadcrumb]);
+  }, [activeSelectedData, selectedNode, breadcrumb]);
 
   if (!isAuthenticated) {
     return <LandingPage />;
