@@ -12,6 +12,12 @@ import {
   Building20Regular,
   Database20Regular,
   Document20Regular,
+  ShieldCheckmark20Regular,
+  DocumentSearch20Regular,
+  Warning20Regular,
+  People20Regular,
+  Organization20Regular,
+  Settings20Regular,
 } from "@fluentui/react-icons";
 import type { NodeType } from "../types";
 import type { ReactElement } from "react";
@@ -38,6 +44,22 @@ const iconMap: Partial<Record<NodeType, ReactElement>> = {
   hubSites: <Building20Regular />,
   drives: <Database20Regular />,
   driveItem: <Document20Regular />,
+  // Analytics mode node types
+  analyticsRoot: <Globe20Regular />,
+  analyticsTenantConfig: <Settings20Regular />,
+  analyticsTenantConfigItem: <Settings20Regular />,
+  analyticsAllSites: <Building20Regular />,
+  analyticsSite: <Building20Regular />,
+  analyticsSiteConfig: <Settings20Regular />,
+  analyticsSitePermissions: <Shield20Regular />,
+  analyticsSiteAudit: <ShieldCheckmark20Regular />,
+  analyticsSiteOversharing: <Warning20Regular />,
+  analyticsByOwner: <Organization20Regular />,
+  analyticsOwnerGroup: <People20Regular />,
+  analyticsByRisk: <Warning20Regular />,
+  analyticsRiskLevel: <Warning20Regular />,
+  analyticsRiskType: <DocumentSearch20Regular />,
+  analyticsExternalUsers: <People20Regular />,
 };
 
 interface TreeNodeProps {
